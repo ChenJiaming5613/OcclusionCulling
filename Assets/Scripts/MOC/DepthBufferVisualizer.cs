@@ -10,20 +10,16 @@ namespace MOC
         [SerializeField] private Color z0Color = Color.black;
         [SerializeField] private Color z1Color = Color.white;
         [SerializeField] private bool showBitmask;
+        [SerializeField] private bool savePng;
+        [SerializeField] private bool reverse;
         private MaskedOcclusionCulling _moc;
-
-        private void Start()
-        {
-            _moc = GetComponent<MaskedOcclusionCulling>();
-        }
-
-        [ContextMenu("Visualize")]
-        private void Visualize()
+        
+        public void Visualize()
         {
             _moc = GetComponent<MaskedOcclusionCulling>();
             CreateDepthBufferIfNeeded();
             UpdateDepthBuffer();
-            SaveTextureAsPNG("Assets/Resources/test_bitmask.png");
+            if (savePng) SaveTextureAsPNG("Assets/Resources/msoc_depth.png");
         }
 
         private void CreateDepthBufferIfNeeded()
@@ -34,6 +30,7 @@ namespace MOC
             {
                 depthBuffer = new Texture2D(Constants.ScreenWidth, Constants.ScreenHeight, TextureFormat.ARGB32, false)
                 {
+                    wrapMode = TextureWrapMode.Clamp,
                     filterMode = FilterMode.Point
                 };
             }
@@ -41,11 +38,12 @@ namespace MOC
 
         private void UpdateDepthBuffer()
         {
-            for (var i = 0; i < _moc.Tiles.Length; i++)
+            var tiles = _moc.GetTiles();
+            for (var i = 0; i < tiles.Length; i++)
             {
                 var tileRow = i / Constants.NumColsTile;
                 var tileCol = i % Constants.NumColsTile;
-                UpdateTile(tileRow, tileCol, _moc.Tiles[i]);
+                UpdateTile(tileRow, tileCol, tiles[i]);
             }
         }
 
@@ -80,13 +78,13 @@ namespace MOC
                     }
                     else
                     {
-                        var weightZ0 = z0;
-                        var weightZ1 = z1;
-                        // if (Mathf.Approximately(z0, float.MaxValue)) weightZ0 = weightZ1 = 0.0f;
-                        if (weightZ0 > float.MaxValue * 0.5f) weightZ0 = 0.0f;
-                        if (weightZ1 > float.MaxValue * 0.5f) weightZ1 = 0.0f;
-                        // weightZ0 = 1.0f - weightZ0;
-                        // weightZ1 = 1.0f - weightZ1;
+                        var weightZ0 = Mathf.Clamp(z0, 0.0f, 1.0f);
+                        var weightZ1 = Mathf.Clamp(z1, 0.0f, 1.0f);
+                        if (reverse)
+                        {
+                            weightZ0 = 1.0f - weightZ0;
+                            weightZ1 = 1.0f - weightZ1;
+                        }
                         depthBuffer.SetPixel(pixelCol, pixelRow, bitValue == 1
                             ? new Color(weightZ1, weightZ1, weightZ1, 1.0f)
                             : new Color(weightZ0, weightZ0, weightZ0, 1.0f));

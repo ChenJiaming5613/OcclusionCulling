@@ -12,6 +12,6 @@
         public const int SubTileHeight = 4;
         public const int NumColsSubTile = 4; // TileWidth / SubTileWidth
         public const int NumRowsSubTile = 1; // TileHeight / SubTileHeight
-        public const int SubPixelPrecision = 1;
+        // public const int SubPixelPrecision = 4;
     }
 }

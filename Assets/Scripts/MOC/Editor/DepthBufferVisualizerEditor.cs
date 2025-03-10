@@ -3,6 +3,7 @@ using UnityEngine;
 
 namespace MOC.Editor
 {
+#if UNITY_EDITOR
     [CustomEditor(typeof(DepthBufferVisualizer))]
     public class DepthBufferVisualizerEditor : UnityEditor.Editor
     {
@@ -16,4 +17,5 @@ namespace MOC.Editor
             }
         }
     }
+#endif
 }

@@ -12,6 +12,8 @@ namespace MOC
         [SerializeField] private bool showBitmask;
         [SerializeField] private bool savePng;
         [SerializeField] private bool reverse;
+        [SerializeField] private bool remapMinMax;
+        [SerializeField]private Vector2 depthRange;
         private MaskedOcclusionCulling _moc;
         
         public void Visualize()
@@ -24,8 +26,7 @@ namespace MOC
 
         private void CreateDepthBufferIfNeeded()
         {
-            if (depthBuffer == null ||
-                depthBuffer.width != Constants.ScreenWidth ||
+            if (!depthBuffer || depthBuffer.width != Constants.ScreenWidth ||
                 depthBuffer.height != Constants.ScreenHeight)
             {
                 depthBuffer = new Texture2D(Constants.ScreenWidth, Constants.ScreenHeight, TextureFormat.ARGB32, false)
@@ -39,12 +40,29 @@ namespace MOC
         private void UpdateDepthBuffer()
         {
             var tiles = _moc.GetTiles();
+            UpdateDepthRange(tiles);
             for (var i = 0; i < tiles.Length; i++)
             {
                 var tileRow = i / Constants.NumColsTile;
                 var tileCol = i % Constants.NumColsTile;
                 UpdateTile(tileRow, tileCol, tiles[i]);
             }
+        }
+
+        private void UpdateDepthRange(Tile[] tiles)
+        {
+            var minDepth = float.MaxValue;
+            var maxDepth = float.MinValue;
+            foreach (var tile in tiles)
+            {
+                for (var i = 0; i < 4; i++)
+                {
+                    if (Mathf.Approximately(tile.z[i], 1.0f)) continue;
+                    minDepth = Mathf.Min(minDepth, tile.z[i]);
+                    maxDepth = Mathf.Max(maxDepth, tile.z[i]);
+                }
+            }
+            depthRange = new Vector2(minDepth, maxDepth);
         }
 
         private void UpdateTile(int tileRow, int tileCol, in Tile tile)
@@ -55,39 +73,38 @@ namespace MOC
                 var pixelRowStart = tileRow * Constants.TileHeight;
                 var pixelColStart = tileCol * Constants.TileWidth + subTileCol * Constants.SubTileWidth;
                 var bitmask = tile.bitmask[subTileCol];
-                var z0 = tile.z0[subTileCol];
-                var z1 = tile.z1[subTileCol];
-                UpdateSubTile(pixelRowStart, pixelColStart, bitmask, z0, z1);
+                var z = tile.z[subTileCol];
+                UpdateSubTile(pixelRowStart, pixelColStart, bitmask, z);
             }
         }
 
-        private void UpdateSubTile(int pixelRowStart, int pixelColStart, uint bitmask, float z0, float z1)
+        private void UpdateSubTile(int pixelRowStart, int pixelColStart, uint bitmask, float z)
         {
             for (var row = 0; row < Constants.SubTileHeight; row++)
             {
                 for (var col = 0; col < Constants.SubTileWidth; col++)
                 {
                     var idx = row * Constants.SubTileWidth + col;
-                    var bitValue = (bitmask >> (31 - idx)) & 1; 
+                    var bitValue = (bitmask >> idx) & 1;
                     var pixelRow = pixelRowStart + row;
                     var pixelCol = pixelColStart + col;
 
                     if (showBitmask)
                     {
                         depthBuffer.SetPixel(pixelCol, pixelRow, bitValue == 1 ? z1Color : z0Color);
+                        continue;
+                    }
+
+                    if (bitValue == 1)
+                    {
+                        z = Mathf.Clamp(z, 0.0f, 1.0f);
+                        if (reverse) z = 1.0f - z;
+                        if (remapMinMax) z = (z - depthRange.x) / (depthRange.y - depthRange.x);
+                        depthBuffer.SetPixel(pixelCol, pixelRow, new Color(z, z, z, 1.0f));
                     }
                     else
                     {
-                        var weightZ0 = Mathf.Clamp(z0, 0.0f, 1.0f);
-                        var weightZ1 = Mathf.Clamp(z1, 0.0f, 1.0f);
-                        if (reverse)
-                        {
-                            weightZ0 = 1.0f - weightZ0;
-                            weightZ1 = 1.0f - weightZ1;
-                        }
-                        depthBuffer.SetPixel(pixelCol, pixelRow, bitValue == 1
-                            ? new Color(weightZ1, weightZ1, weightZ1, 1.0f)
-                            : new Color(weightZ0, weightZ0, weightZ0, 1.0f));
+                        depthBuffer.SetPixel(pixelCol, pixelRow, z0Color);
                     }
                 }
             }

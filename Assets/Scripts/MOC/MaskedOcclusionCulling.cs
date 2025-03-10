@@ -1,35 +1,28 @@
-﻿using System.Linq;
+﻿using System.Diagnostics;
+using System.Linq;
 using Unity.Collections;
 using Unity.Jobs;
 using Unity.Mathematics;
 using UnityEngine;
 using UnityEngine.Assertions;
 using UnityEngine.Profiling;
+using Debug = UnityEngine.Debug;
 
 namespace MOC
 {
     public class MaskedOcclusionCulling : MonoBehaviour
     {
+        public float rasterizeCostTime;
+        
         [SerializeField] private Camera cam;
-        [SerializeField] private GameObject targetGameObject;
-        [SerializeField] private MeshFilter[] meshFilters;
+        [SerializeField] private MeshFilter[] occludersMeshFilters;
+        [SerializeField] private MeshFilter[] occludeesMeshFilters;
         private NativeArray<Tile> _tiles;
+        private Matrix4x4 _vpMatrix;
+        private MeshFilter[] _occludedMeshFilters;
 
         private void Start()
         {
-            Assert.IsTrue(meshFilters != null && cam);
-            if (targetGameObject != null)
-            {
-                meshFilters = targetGameObject.GetComponentsInChildren<MeshFilter>()
-                    .Where(it => it.gameObject.activeSelf).ToArray();
-                var eye = targetGameObject.transform.Find("Eye");
-                if (eye != null)
-                {
-                    cam.transform.position = eye.position;
-                    cam.transform.rotation = eye.rotation;
-                    Debug.Log("Applied Camera Posture!");
-                }
-            }
             _tiles = new NativeArray<Tile>(Constants.NumRowsTile * Constants.NumColsTile, Allocator.Persistent);
             ClearTiles();
         }
@@ -41,15 +34,43 @@ namespace MOC
 
         private void Update()
         {
-            foreach (var meshFilter in meshFilters)
+            // Prepare
+            _vpMatrix = cam.projectionMatrix * cam.worldToCameraMatrix;
+            if (cam.transform.hasChanged)
             {
-                RasterizeMesh(meshFilter);
+                ClearTiles();
+                cam.transform.hasChanged = false;
             }
+            
+            // Step1: Rasterize Occluders
+            var sw = new Stopwatch();
+            sw.Start();
+            RasterizeOccluders();
+            sw.Stop();
+            rasterizeCostTime = sw.ElapsedMilliseconds;
+            
+            // Step2: Test Occludees
+            TestOccludees();
         }
 
+        public void SetOccluders(MeshFilter[] meshFilters)
+        {
+            occludersMeshFilters = meshFilters;
+        }
+
+        public void SetOccludees(MeshFilter[] meshFilters)
+        {
+            occludeesMeshFilters = meshFilters;
+        }
+        
         public Tile[] GetTiles()
         {
             return _tiles.ToArray();
+        }
+
+        public MeshFilter[] GetOccludedMeshFilters()
+        {
+            return _occludedMeshFilters;
         }
         
         private void ClearTiles()
@@ -57,25 +78,73 @@ namespace MOC
             var defaultTile = new Tile
             {
                 bitmask = uint4.zero,
-                z0 = float.MaxValue,
-                z1 = 0.0f
+                // z0 = 1.0f,
+                // z1 = 0.0f
+                z = 1.0f
             };
             for (var i = 0; i < _tiles.Length; i++)
             {
                 _tiles[i] = defaultTile;
             }
+            Debug.Log("Clear Tiles Done!");
         }
 
+        private void RasterizeOccluders()
+        {
+            Profiler.BeginSample("RasterizeOccluders");
+            foreach (var meshFilter in occludersMeshFilters)
+            {
+                RasterizeMesh(meshFilter);
+            }
+            Profiler.EndSample();
+        }
+
+        private void TestOccludees()
+        {
+            Profiler.BeginSample("TestOccludees");
+            Profiler.BeginSample("FillArray");
+            var bounds = new NativeArray<Bounds>(occludeesMeshFilters.Length, Allocator.TempJob);
+            var modelMatrices = new NativeArray<float4x4>(occludeesMeshFilters.Length, Allocator.TempJob);
+            var occludeResults = new NativeArray<bool>(occludeesMeshFilters.Length, Allocator.TempJob);
+            for (var i = 0; i < occludeesMeshFilters.Length; i++)
+            {
+                var meshFilter = occludeesMeshFilters[i];
+                bounds[i] = meshFilter.mesh.bounds;
+                modelMatrices[i] = meshFilter.transform.localToWorldMatrix;
+            }
+            Profiler.EndSample();
+            
+            var testOccludeesJob = new TestOccludeesJob
+            {
+                Bounds = bounds,
+                Tiles = _tiles,
+                ModelMatrices = modelMatrices,
+                VpMatrix = _vpMatrix,
+                OccludeResults = occludeResults
+            };
+            var testOccludeesJobHandle = testOccludeesJob.Schedule(bounds.Length, 64);
+            testOccludeesJobHandle.Complete();
+            var numOccluded = occludeResults.Count(result => result);
+            _occludedMeshFilters = new MeshFilter[numOccluded];
+            var idx = 0;
+            for (var i = 0; i < occludeResults.Length; i++)
+            {
+                if (occludeResults[i])
+                {
+                    _occludedMeshFilters[idx++] = occludeesMeshFilters[i];
+                }
+            }
+            bounds.Dispose();
+            modelMatrices.Dispose();
+            occludeResults.Dispose();
+            Profiler.EndSample();
+        }
+        
         private void RasterizeMesh(MeshFilter meshFilter)
         {
             Profiler.BeginSample(nameof(RasterizeMesh));
             var mesh = meshFilter.sharedMesh;
-            var mvpMatrixRaw = cam.projectionMatrix *
-                               cam.worldToCameraMatrix *
-                               meshFilter.transform.localToWorldMatrix;
-            var mvpMatrix = new float4x4(
-                mvpMatrixRaw.GetColumn(0), mvpMatrixRaw.GetColumn(1),
-                mvpMatrixRaw.GetColumn(2), mvpMatrixRaw.GetColumn(3));
+            var mvpMatrix = _vpMatrix * meshFilter.transform.localToWorldMatrix;
 
             var localSpaceVertices = new NativeArray<Vector3>(mesh.vertices, Allocator.TempJob);
             var screenSpaceVertices = new NativeArray<float3>(localSpaceVertices.Length, Allocator.TempJob);
@@ -104,16 +173,26 @@ namespace MOC
             var prepareTriangleInfosJobHandle =
                 prepareTriangleInfosJob.Schedule(numTri, 64, transformVerticesJobHandle);
 
-            var rasterizeTrianglesJob = new RasterizeTrianglesJob
+            // var rasterizeTrianglesJob = new RasterizeTrianglesJob
+            // {
+            //     TileRanges = tileRanges,
+            //     EdgeParams = edgeParams,
+            //     DepthParams = depthParams,
+            //     Tiles = _tiles,
+            // };
+            // var rasterizeTriangleJobHandle = rasterizeTrianglesJob.Schedule(numTri, 64, prepareTriangleInfosJobHandle);
+            // rasterizeTriangleJobHandle.Complete();
+
+            var binRasterizerJob = new BinRasterizerJob
             {
                 TileRanges = tileRanges,
                 EdgeParams = edgeParams,
                 DepthParams = depthParams,
-                Tiles = _tiles,
+                Tiles = _tiles
             };
-            var rasterizeTriangleJobHandle = rasterizeTrianglesJob.Schedule(numTri, 64, prepareTriangleInfosJobHandle);
-            rasterizeTriangleJobHandle.Complete();
-            
+            var binRasterizerJobHandle = binRasterizerJob.Schedule(Constants.NumBins, 64, prepareTriangleInfosJobHandle);
+            binRasterizerJobHandle.Complete();
+
             localSpaceVertices.Dispose();
             screenSpaceVertices.Dispose();
             indices.Dispose();

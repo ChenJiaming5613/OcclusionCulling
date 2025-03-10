@@ -73,12 +73,20 @@ namespace ROC
                     filterMode = FilterMode.Point
                 };
             }
+            var minDepth = float.MaxValue;
+            var maxDepth = float.MinValue;
+            foreach (var depth in _depthBuffer)
+            {
+                if (depth < minDepth) minDepth = depth;
+                if (depth > maxDepth) maxDepth = depth;
+            }
             for (var y = 0; y < Constants.ScreenHeight; y++)
             {
                 for (var x = 0; x < Constants.ScreenWidth; x++)
                 {
                     var index = y * Constants.ScreenWidth + x;
                     var depth = reversed ? 1.0f - _depthBuffer[index] : _depthBuffer[index];
+                    depth = (depth - minDepth) / (maxDepth - minDepth);
                     depthTexture.SetPixel(x, y, new Color(depth, depth, depth, 1.0f));
                 }
             }
@@ -90,12 +98,38 @@ namespace ROC
             Debug.Log("Texture saved as PNG to: " + path);
         }
 
+        private static Matrix4x4 CalculatePerspectiveMatrix(float fov, float aspect, float near, float far)
+        {
+            var top = near * Mathf.Tan(fov * 0.5f * Mathf.Deg2Rad);
+            var bottom = -top;
+            var right = top * aspect;
+            var left = -right;
+
+            var matrix = new Matrix4x4
+            {
+                [0, 0] = -2f * near / (right - left),
+                [0, 2] = -(right + left) / (right - left),
+                [1, 1] = -2f * near / (top - bottom),
+                [1, 2] = -(top + bottom) / (top - bottom),
+                // [2, 2] = -(far + near) / (far - near),
+                // [2, 3] = -2f * far * near / (far - near),
+                // [3, 2] = -1f,
+                [2, 2] = near / (far - near), // 关键：Reversed-Z
+                [2, 3] = far * near / (far - near),  // 关键：Reversed-Z
+                [3, 2] = 1f,  // 关键：深度范围调整
+                [3, 3] = 0f
+            };
+
+            return matrix;
+        }
+
         private void RasterizeMesh(MeshFilter meshFilter)
         {
             Profiler.BeginSample("RasterizeMesh");
             
             // Step 1
             var mesh = meshFilter.sharedMesh;
+            // var y = CalculatePerspectiveMatrix(cam.fieldOfView, cam.aspect, cam.nearClipPlane, cam.farClipPlane);
             var mvpMatrixRaw = cam.projectionMatrix *
                             cam.worldToCameraMatrix *
                             meshFilter.transform.localToWorldMatrix;

@@ -55,6 +55,8 @@ namespace MOC
             var tileIdx = tileY * Constants.NumColsTile + tileX;
             var bitmask = uint4.zero;
             var zMax = math.min(new float4(0, 1, 2, 3) * zSubTileDx + zBase, zTriMax);
+            
+            // TODO: 如果四个点都在三角形内，则bitmask=1
 
             var maskIdx = 0;
             var wRow = wBase;
@@ -66,7 +68,7 @@ namespace MOC
                     // if (w is { x: >= 0, y: >= 0, z: >= 0 })
                     if ((w.x | w.y | w.z) >= 0)
                     {
-                        bitmask[x / Constants.SubTileWidth] |= (uint)(1 << (31 - (maskIdx + x % Constants.SubTileWidth)));
+                        bitmask[x / Constants.SubTileWidth] |= (uint)(1 << (maskIdx + x % Constants.SubTileWidth));
                     }
 
                     w += wPixelDx;
@@ -76,31 +78,49 @@ namespace MOC
                 maskIdx += Constants.SubTileWidth;
             }
             
+            if (math.all(bitmask == 0u)) return; // TODO
             UpdateTile(tileIdx, ref bitmask, ref zMax);
         }
         
+        // private void UpdateTile(int tileIdx, ref uint4 bitmask, ref float4 zMax)
+        // {
+        //     var tile = Tiles[tileIdx];
+        //     var dist1T = tile.z1 - zMax;
+        //     var dist01 = tile.z0 - tile.z1;
+        //     var flags = dist1T > dist01;
+        //     for (var i = 0; i < 4; i++)
+        //     {
+        //         if (!flags[i]) continue;
+        //         tile.z1[i] = 0.0f;
+        //         tile.bitmask[i] = 0u;
+        //     }
+        //     
+        //     tile.bitmask |= bitmask;
+        //     tile.z1 = math.max(tile.z1, zMax);
+        //     flags = tile.bitmask == ~0u;
+        //     for (var i = 0; i < 4; i++)
+        //     {
+        //         if (!flags[i]) continue;
+        //         tile.z0[i] = tile.z1[i];
+        //         tile.z1[i] = 0.0f;
+        //         tile.bitmask[i] = 0u;
+        //     }
+        //     Tiles[tileIdx] = tile;
+        // }
+
         private void UpdateTile(int tileIdx, ref uint4 bitmask, ref float4 zMax)
         {
             var tile = Tiles[tileIdx];
-            var dist1T = tile.z1 - zMax;
-            var dist01 = tile.z0 - tile.z1;
-            var flags = dist1T > dist01;
             for (var i = 0; i < 4; i++)
             {
-                if (!flags[i]) continue;
-                tile.z1[i] = 0.0f;
-                tile.bitmask[i] = 0u;
-            }
-            
-            tile.bitmask |= bitmask;
-            tile.z1 = math.max(tile.z1, zMax);
-            flags = tile.bitmask == ~0u;
-            for (var i = 0; i < 4; i++)
-            {
-                if (!flags[i]) continue;
-                tile.z0[i] = tile.z1[i];
-                tile.z1[i] = 0.0f;
-                tile.bitmask[i] = 0u;
+                if (bitmask[i] == ~0u && zMax[i] < tile.z[i])
+                {
+                    tile.z[i] = zMax[i];
+                    tile.bitmask[i] = bitmask[i];
+                    continue;
+                }
+                tile.z[i] = tile.bitmask[i] == 0u ? zMax[i] : math.max(tile.z[i], zMax[i]);
+                tile.bitmask[i] |= bitmask[i];
             }
             Tiles[tileIdx] = tile;
         }

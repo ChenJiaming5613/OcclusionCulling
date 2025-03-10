@@ -3,6 +3,7 @@ using UnityEngine;
 
 namespace ROC.Editor
 {
+#if UNITY_EDITOR
     [CustomEditor(typeof(DepthBufferRasterizer))]
     public class DepthBufferRasterizerEditor : UnityEditor.Editor
     {
@@ -16,4 +17,5 @@ namespace ROC.Editor
             }
         }
     }
+#endif
 }

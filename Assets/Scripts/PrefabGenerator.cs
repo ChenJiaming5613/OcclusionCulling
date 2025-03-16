@@ -10,7 +10,7 @@ public class PrefabGenerator : MonoBehaviour
     [SerializeField] private Vector3 minScale = Vector3.one;
     [SerializeField] private Vector3 maxScale = Vector3.one;
     [SerializeField] private Bounds spawnBounds;
-    [SerializeField] private Vector3 rotationRange = new Vector3(360f, 360f, 360f);
+    [SerializeField] private Vector3 rotationRange = new(360f, 360f, 360f);
     
     public void SpawnPrefabs()
     {

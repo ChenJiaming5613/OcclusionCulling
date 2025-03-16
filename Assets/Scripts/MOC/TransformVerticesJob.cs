@@ -2,31 +2,42 @@
 using Unity.Collections;
 using Unity.Jobs;
 using Unity.Mathematics;
-using UnityEngine;
 
 namespace MOC
 {
     [BurstCompile]
     public struct TransformVerticesJob : IJobParallelFor
     {
-        [ReadOnly] public NativeArray<Vector3> LocalSpaceVertices;
-        public float4x4 MvpMatrix;
+        [ReadOnly] public NativeArray<float3> LocalSpaceVertices;
+        [ReadOnly] public NativeArray<int> LocalSpaceVertexOffsets;
+        [ReadOnly] public NativeArray<int> Indices;
+        [ReadOnly] public NativeArray<int> IndexOffsets;
+        [ReadOnly] public NativeArray<float4x4> MvpMatrices;
+        [ReadOnly] public NativeArray<int> FillOffsets;
+        [ReadOnly] public NativeSlice<bool> CullingResults;
 
-        [WriteOnly] public NativeArray<float3> ScreenSpaceVertices;
+        [NativeDisableParallelForRestriction] [WriteOnly]
+        public NativeArray<float3> ScreenSpaceVertices;
         
-        public void Execute(int vertexIdx)
+        public void Execute(int objIdx)
         {
-            var clipSpaceVertex = math.mul(MvpMatrix, new float4(
-                LocalSpaceVertices[vertexIdx].x,
-                LocalSpaceVertices[vertexIdx].y,
-                LocalSpaceVertices[vertexIdx].z,
-                1.0f)
-            );
-            var ndcSpaceVertex = clipSpaceVertex.xyz / clipSpaceVertex.w;
-            var screenSpaceVertex = ndcSpaceVertex * 0.5f + 0.5f;
-            screenSpaceVertex.x *= Constants.ScreenWidth;
-            screenSpaceVertex.y *= Constants.ScreenHeight;
-            ScreenSpaceVertices[vertexIdx] = screenSpaceVertex;
+            if (CullingResults[objIdx]) return;
+            var mvpMatrix = MvpMatrices[objIdx];
+            var fillOffset = FillOffsets[objIdx] * 3;
+            var vertexOffset = LocalSpaceVertexOffsets[objIdx];
+            var indexStart = IndexOffsets[objIdx];
+            var indexEnd = objIdx + 1 < IndexOffsets.Length ? IndexOffsets[objIdx + 1] : Indices.Length;
+            
+            for (var i = indexStart; i < indexEnd; i++)
+            {
+                var localSpaceVertex = new float4(LocalSpaceVertices[Indices[i] + vertexOffset], 1.0f);
+                var clipSpaceVertex = math.mul(mvpMatrix, localSpaceVertex);
+                var ndcSpaceVertex = clipSpaceVertex.xyz / clipSpaceVertex.w;
+                var screenSpaceVertex = ndcSpaceVertex * 0.5f + 0.5f;
+                screenSpaceVertex.x *= Constants.ScreenWidth;
+                screenSpaceVertex.y *= Constants.ScreenHeight;
+                ScreenSpaceVertices[fillOffset + i - indexStart] = screenSpaceVertex;
+            }
         }
     }
 }

@@ -9,15 +9,16 @@ namespace MOC
     [BurstCompile]
     public struct TestOccludeesJob : IJobParallelFor
     {
-        [ReadOnly] public NativeArray<Bounds> Bounds;
+        [ReadOnly] public NativeSlice<Bounds> Bounds;
         [ReadOnly] public NativeArray<Tile> Tiles;
-        [ReadOnly] public NativeArray<float4x4> ModelMatrices;
+        // [NativeDisableParallelForRestriction] public NativeArray<Tile> Tiles;
         public float4x4 VpMatrix;
-        [WriteOnly] public NativeArray<bool> OccludeResults;
+        public NativeSlice<bool> CullingResults;
         
         public void Execute(int objIdx)
         {
-            ComputeRectAndClosestDepth(Bounds[objIdx], VpMatrix * ModelMatrices[objIdx], out var rect, out var closestDepth);
+            if (CullingResults[objIdx]) return;
+            ComputeRectAndClosestDepth(Bounds[objIdx], VpMatrix, out var rect, out var closestDepth);
             var tileSize = new int2(Constants.TileWidth, Constants.TileHeight);
             var tileMin = rect.xz / tileSize;
             var tileMax = rect.yw / tileSize;
@@ -44,18 +45,22 @@ namespace MOC
                     var isOccluded = true;
                     for (var i = 0; i < 4; i++)
                     {
+                        // tile.bitmask[i] |= bitmask[i];
+                        // tile.z[i] = closestDepth;
+                        // continue;
                         // if (closestDepth > tile.z0[i]) continue;
                         if (closestDepth > tile.z[i] && tile.bitmask[i] == (bitmask[i] | tile.bitmask[i])) continue;
                         
                         isOccluded = false;
                         break;
                     }
+                    // Tiles[tileIdx] = tile;
                     if (isOccluded) continue;
-                    OccludeResults[objIdx] = false;
+                    CullingResults[objIdx] = false;
                     return;
                 }
             }
-            OccludeResults[objIdx] = true;
+            CullingResults[objIdx] = true;
         }
 
         private static void ComputeRectAndClosestDepth(

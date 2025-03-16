@@ -8,8 +8,9 @@ namespace MOC
     [BurstCompile]
     public struct BinRasterizerJob : IJobParallelFor
     {
+        public int NumTris;
         [ReadOnly] public NativeArray<int4> TileRanges; // 三角形整个的range,需要clamp到bin中
-        [ReadOnly] public NativeArray<int3x3> EdgeParams; // TODO: 注意Params每个参数的意义
+        [ReadOnly] public NativeArray<int3x3> EdgeParams;
         [ReadOnly] public NativeArray<float4> DepthParams;
         
         [NativeDisableParallelForRestriction] public NativeArray<Tile> Tiles;
@@ -22,7 +23,7 @@ namespace MOC
                 (binIdx + 1) * Constants.NumColsTileInBin - 1,
                 Constants.NumRowsTile - 1
             );
-            for (var triIdx = 0; triIdx < TileRanges.Length; triIdx++)
+            for (var triIdx = 0; triIdx < NumTris; triIdx++)
             {
                 var tileRange = TileRanges[triIdx];
                 if (tileRange.x < 0) continue; // clipped
@@ -107,6 +108,7 @@ namespace MOC
             var tile = Tiles[tileIdx];
             for (var i = 0; i < 4; i++)
             {
+                if (tile.bitmask[i] == ~0u && zMax[i] >= tile.z[i]) continue;
                 if (bitmask[i] == ~0u && zMax[i] < tile.z[i])
                 {
                     tile.z[i] = zMax[i];

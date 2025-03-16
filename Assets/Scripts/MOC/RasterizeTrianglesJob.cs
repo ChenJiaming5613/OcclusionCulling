@@ -79,7 +79,7 @@ namespace MOC
             }
             
             if (math.all(bitmask == 0u)) return; // TODO
-            UpdateTile(tileIdx, ref bitmask, ref zMax);
+            UpdateTile(tileIdx, bitmask, zMax);
         }
         
         // private void UpdateTile(int tileIdx, ref uint4 bitmask, ref float4 zMax)
@@ -108,11 +108,12 @@ namespace MOC
         //     Tiles[tileIdx] = tile;
         // }
 
-        private void UpdateTile(int tileIdx, ref uint4 bitmask, ref float4 zMax)
+        private void UpdateTile(int tileIdx, in uint4 bitmask, in float4 zMax)
         {
             var tile = Tiles[tileIdx];
             for (var i = 0; i < 4; i++)
             {
+                // if (tile.bitmask[i] == ~0u && zMax[i] >= tile.z[i]) continue;
                 if (bitmask[i] == ~0u && zMax[i] < tile.z[i])
                 {
                     tile.z[i] = zMax[i];

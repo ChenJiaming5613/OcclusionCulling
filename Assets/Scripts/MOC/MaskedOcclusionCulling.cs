@@ -1,177 +1,201 @@
 ﻿using System.Diagnostics;
 using System.Linq;
 using Unity.Collections;
+using Unity.Collections.LowLevel.Unsafe;
 using Unity.Jobs;
 using Unity.Mathematics;
 using UnityEngine;
-using UnityEngine.Assertions;
 using UnityEngine.Profiling;
-using Debug = UnityEngine.Debug;
 
 namespace MOC
 {
-    public class MaskedOcclusionCulling : MonoBehaviour
+    public class MaskedOcclusionCulling
     {
-        public float rasterizeCostTime;
+        public float CostTimeOccluders;
+        public float CostTimeOccludees;
+        public float CostTimeClear;
         
-        [SerializeField] private Camera cam;
-        [SerializeField] private MeshFilter[] occludersMeshFilters;
-        [SerializeField] private MeshFilter[] occludeesMeshFilters;
+        private readonly Camera _camera;
         private NativeArray<Tile> _tiles;
         private Matrix4x4 _vpMatrix;
-        private MeshFilter[] _occludedMeshFilters;
 
-        private void Start()
+        private NativeArray<float3> _localSpaceVertices;
+        private NativeArray<int> _localSpaceVertexOffsets;
+        private NativeArray<int> _indices;
+        private NativeArray<int> _indexOffsets;
+        private NativeArray<float4x4> _mvpMatrices;
+        private NativeArray<int> _fillOffsets;
+        private NativeArray<int> _occluderNumTri;
+        private NativeArray<float3> _screenSpaceVertices;
+        private NativeArray<int4> _tileRanges;
+        private NativeArray<int3x3> _edgeParams;
+        private NativeArray<float4> _depthParams;
+        private NativeSlice<Bounds> _bounds;
+        private readonly NativeSlice<bool> _occluderCullingResults;
+        private readonly NativeSlice<bool> _occludeeCullingResults;
+        private readonly MeshFilter[] _occludersMeshFilters;
+        
+        private readonly Stopwatch _stopwatch = new();
+
+        public MaskedOcclusionCulling(Camera camera,
+            MeshRenderer[] occludersMeshRenderers, NativeSlice<Bounds> occludeesBounds,
+            NativeArray<bool> cullingResults)
         {
+            _camera = camera;
+            _bounds = occludeesBounds;
+            _occludersMeshFilters = occludersMeshRenderers.Select(it => it.GetComponent<MeshFilter>()).ToArray();
+            var numOccluders = occludersMeshRenderers.Length;
+            _occluderCullingResults = new NativeSlice<bool>(cullingResults, 0, numOccluders);
+            _occludeeCullingResults = new NativeSlice<bool>(cullingResults, numOccluders);
+            
             _tiles = new NativeArray<Tile>(Constants.NumRowsTile * Constants.NumColsTile, Allocator.Persistent);
             ClearTiles();
-        }
 
-        private void OnDestroy()
-        {
-            _tiles.Dispose();
-        }
-
-        private void Update()
-        {
-            // Prepare
-            _vpMatrix = cam.projectionMatrix * cam.worldToCameraMatrix;
-            if (cam.transform.hasChanged)
+            var numTotalVertices = _occludersMeshFilters.Sum(it => it.mesh.vertices.Length);
+            var numTotalIndices = _occludersMeshFilters.Sum(it => it.mesh.triangles.Length);
+            _localSpaceVertices = new NativeArray<float3>(numTotalVertices, Allocator.Persistent);
+            _indices = new NativeArray<int>(numTotalIndices, Allocator.Persistent);
+            _localSpaceVertexOffsets = new NativeArray<int>(numOccluders, Allocator.Persistent);
+            _indexOffsets = new NativeArray<int>(numOccluders, Allocator.Persistent);
+            _mvpMatrices = new NativeArray<float4x4>(numOccluders, Allocator.Persistent);
+            _fillOffsets = new NativeArray<int>(numOccluders, Allocator.Persistent);
+            _occluderNumTri = new NativeArray<int>(numOccluders, Allocator.Persistent);
+            var numTris = 0;
             {
-                ClearTiles();
-                cam.transform.hasChanged = false;
+                var idxVertex = 0;
+                var idxIndex = 0;
+                var numVertices = 0;
+                var numIndices = 0;
+                for (var i = 0; i < numOccluders; i++)
+                {
+                    var meshFilter = _occludersMeshFilters[i];
+                    var mesh = meshFilter.sharedMesh;
+                    foreach (var vertex in mesh.vertices)
+                    {
+                        _localSpaceVertices[idxVertex++] = vertex;
+                    }
+                    foreach (var triangle in mesh.triangles)
+                    {
+                        _indices[idxIndex++] = triangle;
+                    }
+                    _localSpaceVertexOffsets[i] = numVertices;
+                    _indexOffsets[i] = numIndices;
+                    numVertices += mesh.vertices.Length;
+                    numIndices += mesh.triangles.Length;
+                    _occluderNumTri[i] = mesh.triangles.Length / 3;
+                    numTris += _occluderNumTri[i];
+                }
             }
             
+            _screenSpaceVertices = new NativeArray<float3>(numTris * 3, Allocator.Persistent);
+            _tileRanges = new NativeArray<int4>(numTris, Allocator.Persistent);
+            _edgeParams = new NativeArray<int3x3>(numTris, Allocator.Persistent);
+            _depthParams = new NativeArray<float4>(numTris, Allocator.Persistent);
+        }
+
+        public void Dispose()
+        {
+            _tiles.Dispose();
+            
+            _localSpaceVertices.Dispose();
+            _localSpaceVertexOffsets.Dispose();
+            _indices.Dispose();
+            _indexOffsets.Dispose();
+            _mvpMatrices.Dispose();
+            _fillOffsets.Dispose();
+            _occluderNumTri.Dispose();
+            _screenSpaceVertices.Dispose();
+            
+            _tileRanges.Dispose();
+            _edgeParams.Dispose();
+            _depthParams.Dispose();
+        }
+
+        public void Cull()
+        {
+            // Prepare
+            _vpMatrix = _camera.projectionMatrix * _camera.worldToCameraMatrix;
+            _stopwatch.Restart();
+            ClearTiles();
+            _stopwatch.Stop();
+            CostTimeClear = _stopwatch.ElapsedTicks * 1000f / Stopwatch.Frequency;
+            
             // Step1: Rasterize Occluders
-            var sw = new Stopwatch();
-            sw.Start();
+            _stopwatch.Restart();
             RasterizeOccluders();
-            sw.Stop();
-            rasterizeCostTime = sw.ElapsedMilliseconds;
+            _stopwatch.Stop();
+            CostTimeOccluders = _stopwatch.ElapsedTicks * 1000f / Stopwatch.Frequency;
             
             // Step2: Test Occludees
+            _stopwatch.Restart();
             TestOccludees();
+            _stopwatch.Stop();
+            CostTimeOccludees = _stopwatch.ElapsedTicks * 1000f / Stopwatch.Frequency;
         }
 
-        public void SetOccluders(MeshFilter[] meshFilters)
-        {
-            occludersMeshFilters = meshFilters;
-        }
-
-        public void SetOccludees(MeshFilter[] meshFilters)
-        {
-            occludeesMeshFilters = meshFilters;
-        }
-        
         public Tile[] GetTiles()
         {
             return _tiles.ToArray();
         }
 
-        public MeshFilter[] GetOccludedMeshFilters()
-        {
-            return _occludedMeshFilters;
-        }
-        
         private void ClearTiles()
         {
-            var defaultTile = new Tile
+            Profiler.BeginSample("Clear Tiles");
+            unsafe
             {
-                bitmask = uint4.zero,
-                // z0 = 1.0f,
-                // z1 = 0.0f
-                z = 1.0f
-            };
-            for (var i = 0; i < _tiles.Length; i++)
-            {
-                _tiles[i] = defaultTile;
+                var defaultTile = new Tile
+                {
+                    bitmask = uint4.zero,
+                    // z0 = 1.0f,
+                    // z1 = 0.0f
+                    z = 1.0f
+                };
+                UnsafeUtility.MemCpyReplicate(_tiles.GetUnsafePtr(), &defaultTile, sizeof(Tile), _tiles.Length);
             }
-            Debug.Log("Clear Tiles Done!");
+            Profiler.EndSample();
         }
 
         private void RasterizeOccluders()
         {
             Profiler.BeginSample("RasterizeOccluders");
-            foreach (var meshFilter in occludersMeshFilters)
-            {
-                RasterizeMesh(meshFilter);
-            }
-            Profiler.EndSample();
-        }
-
-        private void TestOccludees()
-        {
-            Profiler.BeginSample("TestOccludees");
-            Profiler.BeginSample("FillArray");
-            var bounds = new NativeArray<Bounds>(occludeesMeshFilters.Length, Allocator.TempJob);
-            var modelMatrices = new NativeArray<float4x4>(occludeesMeshFilters.Length, Allocator.TempJob);
-            var occludeResults = new NativeArray<bool>(occludeesMeshFilters.Length, Allocator.TempJob);
-            for (var i = 0; i < occludeesMeshFilters.Length; i++)
-            {
-                var meshFilter = occludeesMeshFilters[i];
-                bounds[i] = meshFilter.mesh.bounds;
-                modelMatrices[i] = meshFilter.transform.localToWorldMatrix;
-            }
-            Profiler.EndSample();
             
-            var testOccludeesJob = new TestOccludeesJob
+            Profiler.BeginSample("TransformMesh");
+            var numOccluders = _occluderCullingResults.Length;
+            Profiler.BeginSample("UpdateMVP");
+            var numTotalTris = 0;
+            for (var i = 0; i < numOccluders; i++)
             {
-                Bounds = bounds,
-                Tiles = _tiles,
-                ModelMatrices = modelMatrices,
-                VpMatrix = _vpMatrix,
-                OccludeResults = occludeResults
-            };
-            var testOccludeesJobHandle = testOccludeesJob.Schedule(bounds.Length, 64);
-            testOccludeesJobHandle.Complete();
-            var numOccluded = occludeResults.Count(result => result);
-            _occludedMeshFilters = new MeshFilter[numOccluded];
-            var idx = 0;
-            for (var i = 0; i < occludeResults.Length; i++)
-            {
-                if (occludeResults[i])
-                {
-                    _occludedMeshFilters[idx++] = occludeesMeshFilters[i];
-                }
+                if (_occluderCullingResults[i]) continue;
+                _fillOffsets[i] = numTotalTris;
+                numTotalTris += _occluderNumTri[i];
+                _mvpMatrices[i] = _vpMatrix * _occludersMeshFilters[i].transform.localToWorldMatrix; // TODO: optimize by burst
             }
-            bounds.Dispose();
-            modelMatrices.Dispose();
-            occludeResults.Dispose();
             Profiler.EndSample();
-        }
-        
-        private void RasterizeMesh(MeshFilter meshFilter)
-        {
-            Profiler.BeginSample(nameof(RasterizeMesh));
-            var mesh = meshFilter.sharedMesh;
-            var mvpMatrix = _vpMatrix * meshFilter.transform.localToWorldMatrix;
-
-            var localSpaceVertices = new NativeArray<Vector3>(mesh.vertices, Allocator.TempJob);
-            var screenSpaceVertices = new NativeArray<float3>(localSpaceVertices.Length, Allocator.TempJob);
             var transformVerticesJob = new TransformVerticesJob
             {
-                LocalSpaceVertices = localSpaceVertices,
-                MvpMatrix = mvpMatrix,
-                ScreenSpaceVertices = screenSpaceVertices
+                LocalSpaceVertices = _localSpaceVertices,
+                LocalSpaceVertexOffsets = _localSpaceVertexOffsets,
+                Indices = _indices,
+                IndexOffsets = _indexOffsets,
+                MvpMatrices = _mvpMatrices,
+                FillOffsets = _fillOffsets,
+                CullingResults = _occluderCullingResults,
+                ScreenSpaceVertices = _screenSpaceVertices
             };
-            var transformVerticesJobHandle = transformVerticesJob.Schedule(localSpaceVertices.Length, 64);
-
-            Assert.IsTrue(mesh.triangles.Length % 3 == 0);
-            var numTri = mesh.triangles.Length / 3;
-            var indices = new NativeArray<int>(mesh.triangles, Allocator.TempJob);
-            var tileRanges = new NativeArray<int4>(numTri, Allocator.TempJob);
-            var edgeParams = new NativeArray<int3x3>(numTri, Allocator.TempJob);
-            var depthParams = new NativeArray<float4>(numTri, Allocator.TempJob);
+            var transformVerticesJobHandle = transformVerticesJob.Schedule(numOccluders, 64);
+            transformVerticesJobHandle.Complete();
+            Profiler.EndSample();
+            
+            
             var prepareTriangleInfosJob = new PrepareTriangleInfosJob
             {
-                ScreenSpaceVertices = screenSpaceVertices,
-                Indices = indices,
-                TileRanges = tileRanges,
-                EdgeParams = edgeParams,
-                DepthParams = depthParams,
+                ScreenSpaceVertices = _screenSpaceVertices,
+                TileRanges = _tileRanges,
+                EdgeParams = _edgeParams,
+                DepthParams = _depthParams,
             };
             var prepareTriangleInfosJobHandle =
-                prepareTriangleInfosJob.Schedule(numTri, 64, transformVerticesJobHandle);
+                prepareTriangleInfosJob.Schedule(numTotalTris, 64);
 
             // var rasterizeTrianglesJob = new RasterizeTrianglesJob
             // {
@@ -185,21 +209,30 @@ namespace MOC
 
             var binRasterizerJob = new BinRasterizerJob
             {
-                TileRanges = tileRanges,
-                EdgeParams = edgeParams,
-                DepthParams = depthParams,
+                NumTris = numTotalTris,
+                TileRanges = _tileRanges,
+                EdgeParams = _edgeParams,
+                DepthParams = _depthParams,
                 Tiles = _tiles
             };
-            var binRasterizerJobHandle = binRasterizerJob.Schedule(Constants.NumBins, 64, prepareTriangleInfosJobHandle);
+            prepareTriangleInfosJobHandle.Complete();
+            var binRasterizerJobHandle = binRasterizerJob.Schedule(Constants.NumBins, 1);
             binRasterizerJobHandle.Complete();
+            Profiler.EndSample();
+        }
 
-            localSpaceVertices.Dispose();
-            screenSpaceVertices.Dispose();
-            indices.Dispose();
-            tileRanges.Dispose();
-            edgeParams.Dispose();
-            depthParams.Dispose();
-            
+        private void TestOccludees()
+        {
+            Profiler.BeginSample("TestOccludees");
+            var testOccludeesJob = new TestOccludeesJob
+            {
+                Bounds = _bounds,
+                Tiles = _tiles,
+                VpMatrix = _vpMatrix,
+                CullingResults = _occludeeCullingResults
+            };
+            var testOccludeesJobHandle = testOccludeesJob.Schedule(_bounds.Length, 64);
+            testOccludeesJobHandle.Complete();
             Profiler.EndSample();
         }
     }

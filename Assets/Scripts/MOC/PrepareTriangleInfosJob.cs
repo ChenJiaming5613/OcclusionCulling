@@ -9,7 +9,6 @@ namespace MOC
     public struct PrepareTriangleInfosJob : IJobParallelFor
     {
         [ReadOnly] public NativeArray<float3> ScreenSpaceVertices;
-        [ReadOnly] public NativeArray<int> Indices;
         
         [WriteOnly] public NativeArray<int4> TileRanges;
         [WriteOnly] public NativeArray<int3x3> EdgeParams;
@@ -18,9 +17,9 @@ namespace MOC
         public void Execute(int triIdx)
         {
             var idx = triIdx * 3;
-            var v0 = ScreenSpaceVertices[Indices[idx]];
-            var v1 = ScreenSpaceVertices[Indices[idx + 1]];
-            var v2 = ScreenSpaceVertices[Indices[idx + 2]];
+            var v0 = ScreenSpaceVertices[idx];
+            var v1 = ScreenSpaceVertices[idx + 1];
+            var v2 = ScreenSpaceVertices[idx + 2];
             
             var iv0 = new int2(v0.xy + 0.5f); // TODO: Constants.SubPixelPrecision
             var iv1 = new int2(v1.xy + 0.5f);

@@ -76,27 +76,94 @@ namespace MOC
             var tileIdx = tileY * Constants.NumColsTile + tileX;
             var bitmask = uint4.zero;
             var zMax = math.min(new float4(0, 1, 2, 3) * zSubTileDx + zBase, zTriMax);
-            
-            // TODO: 如果四个点都在三角形内，则bitmask=1
 
-            var maskIdx = 0;
-            var wRow = wBase;
-            for (var y = 0; y < Constants.TileHeight; y++)
+            // var maskIdx = 0;
+            // var wRow = wBase;
+            // for (var y = 0; y < Constants.TileHeight; y++)
+            // {
+            //     var w = wRow;
+            //     for (var x = 0; x < Constants.TileWidth; x++)
+            //     {
+            //         if ((w.x | w.y | w.z) > 0)
+            //         {
+            //             bitmask[x / Constants.SubTileWidth] |= (uint)(1 << (maskIdx + x % Constants.SubTileWidth));
+            //         }
+            //
+            //         w += wPixelDx;
+            //     }
+            //
+            //     wRow += wPixelDy;
+            //     maskIdx += Constants.SubTileWidth;
+            // }
+
+            var wSubTileDx = wPixelDx * Constants.SubTileWidth;
+            var wSubTileDy = wPixelDy * Constants.SubTileHeight;
+            var wLB = wBase;
+            var wRB = wBase + wSubTileDx;
+            var wLT = wBase + wSubTileDy;
+            var wRT = wBase + wSubTileDx + wSubTileDy;
+            var offset = new int4(0, 1, 2, 3);
+            var wx = offset * wPixelDy.x + wBase.x;
+            var wy = offset * wPixelDy.y + wBase.y;
+            var wz = offset * wPixelDy.z + wBase.z;
+            for (var subTileIdx = 0; subTileIdx < 4; subTileIdx++)
             {
-                var w = wRow;
-                for (var x = 0; x < Constants.TileWidth; x++)
+                // var allInside = (wLT.x > 0 & wLT.y > 0 & wLT.z > 0) &&
+                //                 (wRT.x > 0 & wRT.y > 0 & wRT.z > 0) &&
+                //                 (wLB.x > 0 & wLB.y > 0 & wLB.z > 0) &&
+                //                 (wRB.x > 0 & wRB.y > 0 & wRB.z > 0);
+                var allInside = math.all((wLT > 0) & (wRT > 0) & (wLB > 0) & (wRB > 0));
+                if (allInside)
                 {
-                    // if (w is { x: >= 0, y: >= 0, z: >= 0 })
-                    if ((w.x | w.y | w.z) >= 0)
-                    {
-                        bitmask[x / Constants.SubTileWidth] |= (uint)(1 << (maskIdx + x % Constants.SubTileWidth));
-                    }
-
-                    w += wPixelDx;
+                    bitmask[subTileIdx] = ~0u;
+                    wLB += wSubTileDx;
+                    wRB += wSubTileDx;
+                    wLT += wSubTileDx;
+                    wRT += wSubTileDx;
+                    wx += wSubTileDx.x;
+                    wy += wSubTileDx.y;
+                    wz += wSubTileDx.z;
+                    continue;
                 }
-
-                wRow += wPixelDy;
-                maskIdx += Constants.SubTileWidth;
+            
+                // var allEdgeOut = (wLT.x < 0 & wRT.x < 0 & wLB.x < 0 & wRB.x < 0) |
+                //                  (wLT.y < 0 & wRT.y < 0 & wLB.y < 0 & wRB.y < 0) |
+                //                  (wLT.z < 0 & wRT.z < 0 & wLB.z < 0 & wRB.z < 0);
+                // if (allEdgeOut)
+                // {
+                //     bitmask[subTileIdx] = 0u;
+                //     wLB += wSubTileDx;
+                //     wRB += wSubTileDx;
+                //     wLT += wSubTileDx;
+                //     wRT += wSubTileDx;
+                //     wx += wSubTileDx.x;
+                //     wy += wSubTileDx.y;
+                //     wz += wSubTileDx.z;
+                //     continue;
+                // }
+            
+                var subTileMask = 0u;
+                for (var i = 0; i < Constants.SubTileWidth; i++)
+                {
+                    var status = (wx | wy | wz) > 0;
+                    var shifts = math.select(0u, 1u, status);
+                    var mask = (shifts[0] << i) |
+                               (shifts[1] << (i + 8)) |
+                               (shifts[2] << (i + 16)) |
+                               (shifts[3] << (i + 24));
+                    subTileMask |= mask;
+                    
+                    wx += wPixelDx.x;
+                    wy += wPixelDx.y;
+                    wz += wPixelDx.z;
+                }
+            
+                bitmask[subTileIdx] = subTileMask;
+                
+                wLB += wSubTileDx;
+                wRB += wSubTileDx;
+                wLT += wSubTileDx;
+                wRT += wSubTileDx;
             }
             
             if (math.all(bitmask == 0u)) return; // TODO

@@ -113,7 +113,7 @@ namespace MOC
             var tile = Tiles[tileIdx];
             for (var i = 0; i < 4; i++)
             {
-                // if (tile.bitmask[i] == ~0u && zMax[i] >= tile.z[i]) continue;
+                if (tile.bitmask[i] == ~0u && zMax[i] >= tile.z[i]) continue;
                 if (bitmask[i] == ~0u && zMax[i] < tile.z[i])
                 {
                     tile.z[i] = zMax[i];

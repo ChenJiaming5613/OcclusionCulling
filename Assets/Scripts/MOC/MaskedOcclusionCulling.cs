@@ -23,7 +23,9 @@ namespace MOC
         private NativeArray<int> _localSpaceVertexOffsets;
         private NativeArray<int> _indices;
         private NativeArray<int> _indexOffsets;
+        private NativeArray<float4x4> _modelMatrices;
         private NativeArray<float4x4> _mvpMatrices;
+        private NativeArray<int> _numTotalTris;
         private NativeArray<int> _fillOffsets;
         private NativeArray<int> _occluderNumTri;
         private NativeArray<float3> _screenSpaceVertices;
@@ -33,8 +35,7 @@ namespace MOC
         private NativeSlice<Bounds> _bounds;
         private readonly NativeSlice<bool> _occluderCullingResults;
         private readonly NativeSlice<bool> _occludeeCullingResults;
-        private readonly MeshFilter[] _occludersMeshFilters;
-        
+
         private readonly Stopwatch _stopwatch = new();
 
         public MaskedOcclusionCulling(Camera camera,
@@ -43,7 +44,7 @@ namespace MOC
         {
             _camera = camera;
             _bounds = occludeesBounds;
-            _occludersMeshFilters = occludersMeshRenderers.Select(it => it.GetComponent<MeshFilter>()).ToArray();
+            var occludersMeshFilters = occludersMeshRenderers.Select(it => it.GetComponent<MeshFilter>()).ToArray();
             var numOccluders = occludersMeshRenderers.Length;
             _occluderCullingResults = new NativeSlice<bool>(cullingResults, 0, numOccluders);
             _occludeeCullingResults = new NativeSlice<bool>(cullingResults, numOccluders);
@@ -51,15 +52,17 @@ namespace MOC
             _tiles = new NativeArray<Tile>(Constants.NumRowsTile * Constants.NumColsTile, Allocator.Persistent);
             ClearTiles();
 
-            var numTotalVertices = _occludersMeshFilters.Sum(it => it.mesh.vertices.Length);
-            var numTotalIndices = _occludersMeshFilters.Sum(it => it.mesh.triangles.Length);
+            var numTotalVertices = occludersMeshFilters.Sum(it => it.mesh.vertices.Length);
+            var numTotalIndices = occludersMeshFilters.Sum(it => it.mesh.triangles.Length);
             _localSpaceVertices = new NativeArray<float3>(numTotalVertices, Allocator.Persistent);
             _indices = new NativeArray<int>(numTotalIndices, Allocator.Persistent);
             _localSpaceVertexOffsets = new NativeArray<int>(numOccluders, Allocator.Persistent);
             _indexOffsets = new NativeArray<int>(numOccluders, Allocator.Persistent);
+            _modelMatrices = new NativeArray<float4x4>(numOccluders, Allocator.Persistent);
             _mvpMatrices = new NativeArray<float4x4>(numOccluders, Allocator.Persistent);
             _fillOffsets = new NativeArray<int>(numOccluders, Allocator.Persistent);
             _occluderNumTri = new NativeArray<int>(numOccluders, Allocator.Persistent);
+            _numTotalTris = new NativeArray<int>(1, Allocator.Persistent);
             var numTris = 0;
             {
                 var idxVertex = 0;
@@ -68,7 +71,7 @@ namespace MOC
                 var numIndices = 0;
                 for (var i = 0; i < numOccluders; i++)
                 {
-                    var meshFilter = _occludersMeshFilters[i];
+                    var meshFilter = occludersMeshFilters[i];
                     var mesh = meshFilter.sharedMesh;
                     foreach (var vertex in mesh.vertices)
                     {
@@ -84,6 +87,7 @@ namespace MOC
                     numIndices += mesh.triangles.Length;
                     _occluderNumTri[i] = mesh.triangles.Length / 3;
                     numTris += _occluderNumTri[i];
+                    _modelMatrices[i] = occludersMeshFilters[i].transform.localToWorldMatrix;
                 }
             }
             
@@ -101,7 +105,9 @@ namespace MOC
             _localSpaceVertexOffsets.Dispose();
             _indices.Dispose();
             _indexOffsets.Dispose();
+            _modelMatrices.Dispose();
             _mvpMatrices.Dispose();
+            _numTotalTris.Dispose();
             _fillOffsets.Dispose();
             _occluderNumTri.Dispose();
             _screenSpaceVertices.Dispose();
@@ -161,16 +167,19 @@ namespace MOC
             
             Profiler.BeginSample("TransformMesh");
             var numOccluders = _occluderCullingResults.Length;
-            Profiler.BeginSample("UpdateMVP");
-            var numTotalTris = 0;
-            for (var i = 0; i < numOccluders; i++)
+            var updateMatricesJob = new UpdateMatricesJob
             {
-                if (_occluderCullingResults[i]) continue;
-                _fillOffsets[i] = numTotalTris;
-                numTotalTris += _occluderNumTri[i];
-                _mvpMatrices[i] = _vpMatrix * _occludersMeshFilters[i].transform.localToWorldMatrix; // TODO: optimize by burst
-            }
-            Profiler.EndSample();
+                NumOccluders = numOccluders,
+                VpMatrix = _vpMatrix,
+                OccluderCullingResults = _occluderCullingResults,
+                OccluderNumTri = _occluderNumTri,
+                ModelMatrices = _modelMatrices,
+                FillOffsets = _fillOffsets,
+                MvpMatrices = _mvpMatrices,
+                NumTotalTris = _numTotalTris
+            };
+            updateMatricesJob.Run();
+            var numTotalTris = _numTotalTris[0];
             var transformVerticesJob = new TransformVerticesJob
             {
                 LocalSpaceVertices = _localSpaceVertices,
@@ -199,13 +208,15 @@ namespace MOC
 
             // var rasterizeTrianglesJob = new RasterizeTrianglesJob
             // {
-            //     TileRanges = tileRanges,
-            //     EdgeParams = edgeParams,
-            //     DepthParams = depthParams,
+            //     TileRanges = _tileRanges,
+            //     EdgeParams = _edgeParams,
+            //     DepthParams = _depthParams,
             //     Tiles = _tiles,
             // };
-            // var rasterizeTriangleJobHandle = rasterizeTrianglesJob.Schedule(numTri, 64, prepareTriangleInfosJobHandle);
-            // rasterizeTriangleJobHandle.Complete();
+            // // var rasterizeTriangleJobHandle = rasterizeTrianglesJob.Schedule(numTotalTris, 64, prepareTriangleInfosJobHandle);
+            // // rasterizeTriangleJobHandle.Complete();
+            // prepareTriangleInfosJobHandle.Complete();
+            // rasterizeTrianglesJob.Run(numTotalTris);
 
             var binRasterizerJob = new BinRasterizerJob
             {
@@ -218,6 +229,7 @@ namespace MOC
             prepareTriangleInfosJobHandle.Complete();
             var binRasterizerJobHandle = binRasterizerJob.Schedule(Constants.NumBins, 1);
             binRasterizerJobHandle.Complete();
+            // binRasterizerJob.Run(Constants.NumBins);
             Profiler.EndSample();
         }
 

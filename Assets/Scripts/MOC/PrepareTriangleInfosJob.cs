@@ -25,7 +25,9 @@ namespace MOC
             var iv1 = new int2(v1.xy + 0.5f);
             var iv2 = new int2(v2.xy + 0.5f);
             var area = (iv1.x - iv0.x) * (iv2.y - iv0.y) - (iv2.x - iv0.x) * (iv1.y - iv0.y);
-            if (area > 0)
+            var z = new float3(v0.z, v1.z, v2.z);
+            // if (area > 0)
+            if (area > 0 || math.any(z < 0.0f) || math.any(z > 1.0f)) // discard instead clipping
             {
                 TileRanges[triIdx] = new int4(-1);
                 return;

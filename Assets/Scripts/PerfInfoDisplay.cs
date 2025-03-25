@@ -14,9 +14,11 @@ public class PerfInfoDisplay : MonoBehaviour
     private void Update()
     {
         if (_msoc == null && cullingSystem) _msoc = cullingSystem.GetMaskedOcclusionCulling();
-        text.text = $"Cost Time: {Time.deltaTime * 1000:F2}ms" +
-                    $"\nFC: {cullingSystem.costTimeFrustumCulling:F2}ms" +
-                    $"\nMSOC: {cullingSystem.costTimeMaskedOcclusionCulling:F2}ms" +
+        var deltaTime = Time.deltaTime;
+        text.text = $"Cost Time: {deltaTime * 1000:F2}ms {1.0f / deltaTime:F2}fps" +
+                    (!cullingSystem ? "" :
+                        $"\nFC: {cullingSystem.costTimeFrustumCulling:F2}ms" + 
+                        $"\nMSOC: {cullingSystem.costTimeMaskedOcclusionCulling:F2}ms") +
                     (_msoc == null ? "" :
                         $"\nOccluders: {_msoc.CostTimeOccluders:F2}ms" + 
                         $"\nOccludees: {_msoc.CostTimeOccludees:F2}ms" +

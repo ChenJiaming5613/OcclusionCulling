@@ -8,12 +8,24 @@ public class SetPose : MonoBehaviour
     [SerializeField] private float nearClipPlane = 0.3f;
     [SerializeField] private float farClipPlane = 1000.0f;
     [SerializeField] private float fieldOfView = 60.0f;
+    [SerializeField] private Transform targetPose;
     
-    
-    [ContextMenu("Execute")]
-    public void Execute()
+    [ContextMenu("SetPoseByFields")]
+    public void SetPoseByFields()
     {
-        cam.transform.SetPositionAndRotation(position, rotation);
+        SetCameraPose(position, rotation);
+    }
+    
+    [ContextMenu("SetPoseByTransform")]
+    public void SetPoseByTransform()
+    {
+        if (targetPose == null) return;
+        SetCameraPose(targetPose.position, targetPose.rotation);
+    }
+
+    private void SetCameraPose(in Vector3 pos, in Quaternion rot)
+    {
+        cam.transform.SetPositionAndRotation(pos, rot);
         cam.nearClipPlane = nearClipPlane;
         cam.farClipPlane = farClipPlane;
         cam.fieldOfView = fieldOfView;

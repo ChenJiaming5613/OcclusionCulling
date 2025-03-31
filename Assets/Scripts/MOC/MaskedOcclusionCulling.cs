@@ -11,9 +11,7 @@ namespace MOC
 {
     public class MaskedOcclusionCulling
     {
-        public float CostTimeOccluders;
-        public float CostTimeOccludees;
-        public float CostTimeClear;
+        public MaskedOcclusionCullingStatData StatData;
         
         private readonly Camera _camera;
         private NativeArray<Tile> _tiles;
@@ -30,7 +28,12 @@ namespace MOC
         private NativeArray<int> _occluderNumTri;
         private NativeArray<float3> _screenSpaceVertices;
         private NativeArray<int4> _tileRanges;
-        private NativeArray<int3x3> _edgeParams;
+        // private NativeArray<int3x3> _edgeParams;
+        private NativeArray<float3> _invSlope;
+        private NativeArray<int3> _vx;
+        private NativeArray<int3> _vy;
+        private NativeArray<bool3> _isRightEdge;
+        private NativeArray<int3> _flatInfo;
         private NativeArray<float4> _depthParams;
         private NativeSlice<Bounds> _bounds;
         private readonly NativeSlice<bool> _occluderCullingResults;
@@ -93,7 +96,12 @@ namespace MOC
             
             _screenSpaceVertices = new NativeArray<float3>(numTris * 3, Allocator.Persistent);
             _tileRanges = new NativeArray<int4>(numTris, Allocator.Persistent);
-            _edgeParams = new NativeArray<int3x3>(numTris, Allocator.Persistent);
+            // _edgeParams = new NativeArray<int3x3>(numTris, Allocator.Persistent);
+            _invSlope = new NativeArray<float3>(numTris, Allocator.Persistent);
+            _vx = new NativeArray<int3>(numTris, Allocator.Persistent);
+            _vy = new NativeArray<int3>(numTris, Allocator.Persistent);
+            _isRightEdge = new NativeArray<bool3>(numTris, Allocator.Persistent);
+            _flatInfo = new NativeArray<int3>(numTris, Allocator.Persistent);
             _depthParams = new NativeArray<float4>(numTris, Allocator.Persistent);
         }
 
@@ -113,7 +121,12 @@ namespace MOC
             _screenSpaceVertices.Dispose();
             
             _tileRanges.Dispose();
-            _edgeParams.Dispose();
+            // _edgeParams.Dispose();
+            _invSlope.Dispose();
+            _vx.Dispose();
+            _vy.Dispose();
+            _isRightEdge.Dispose();
+            _flatInfo.Dispose();
             _depthParams.Dispose();
         }
 
@@ -124,19 +137,19 @@ namespace MOC
             _stopwatch.Restart();
             ClearTiles();
             _stopwatch.Stop();
-            CostTimeClear = _stopwatch.ElapsedTicks * 1000f / Stopwatch.Frequency;
+            StatData.CostTimeClear = _stopwatch.ElapsedTicks * 1000f / Stopwatch.Frequency;
             
             // Step1: Rasterize Occluders
             _stopwatch.Restart();
             RasterizeOccluders();
             _stopwatch.Stop();
-            CostTimeOccluders = _stopwatch.ElapsedTicks * 1000f / Stopwatch.Frequency;
+            StatData.CostTimeOccluders = _stopwatch.ElapsedTicks * 1000f / Stopwatch.Frequency;
             
             // Step2: Test Occludees
             _stopwatch.Restart();
             TestOccludees();
             _stopwatch.Stop();
-            CostTimeOccludees = _stopwatch.ElapsedTicks * 1000f / Stopwatch.Frequency;
+            StatData.CostTimeOccludees = _stopwatch.ElapsedTicks * 1000f / Stopwatch.Frequency;
         }
 
         public Tile[] GetTiles()
@@ -200,7 +213,12 @@ namespace MOC
             {
                 ScreenSpaceVertices = _screenSpaceVertices,
                 TileRanges = _tileRanges,
-                EdgeParams = _edgeParams,
+                // EdgeParams = _edgeParams,
+                InvSlope = _invSlope,
+                Vx = _vx,
+                Vy = _vy,
+                IsRightEdge = _isRightEdge,
+                FlatInfo = _flatInfo,
                 DepthParams = _depthParams,
             };
             var prepareTriangleInfosJobHandle =
@@ -222,11 +240,23 @@ namespace MOC
             {
                 NumTris = numTotalTris,
                 TileRanges = _tileRanges,
-                EdgeParams = _edgeParams,
+                // EdgeParams = _edgeParams,
+                InvSlope = _invSlope,
+                Vx = _vx,
+                Vy = _vy,
+                IsRightEdge = _isRightEdge,
+                FlatInfo = _flatInfo,
                 DepthParams = _depthParams,
                 Tiles = _tiles
             };
             prepareTriangleInfosJobHandle.Complete();
+            // StatData.TotalTriCount = numTotalTris;
+            // var clippingTriCount = 0;
+            // for (var i = 0; i < numTotalTris; i++)
+            // {
+            //     if (_tileRanges[i].x == -1) clippingTriCount++;
+            // }
+            // StatData.ClippedTriCount = clippingTriCount;
             var binRasterizerJobHandle = binRasterizerJob.Schedule(Constants.NumBins, 1);
             binRasterizerJobHandle.Complete();
             // binRasterizerJob.Run(Constants.NumBins);
@@ -247,5 +277,14 @@ namespace MOC
             testOccludeesJobHandle.Complete();
             Profiler.EndSample();
         }
+    }
+
+    public struct MaskedOcclusionCullingStatData
+    {
+        public float CostTimeOccluders;
+        public float CostTimeOccludees;
+        public float CostTimeClear;
+        // public int TotalTriCount;
+        // public int ClippedTriCount; // backface culling & near plane clipping & zero triangle clipping
     }
 }

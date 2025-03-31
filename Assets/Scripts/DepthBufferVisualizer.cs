@@ -9,6 +9,7 @@ public class DepthBufferVisualizer : MonoBehaviour
     [SerializeField] private Color z0Color = Color.black;
     [SerializeField] private Color z1Color = Color.white;
     [SerializeField] private bool showBitmask;
+    [SerializeField] private bool visTileBorder;
     [SerializeField] private bool savePng;
     [SerializeField] private bool reverse;
     [SerializeField] private bool remapMinMax;
@@ -48,6 +49,7 @@ public class DepthBufferVisualizer : MonoBehaviour
             var tileCol = i % Constants.NumColsTile;
             UpdateTile(tileRow, tileCol, tiles[i]);
         }
+        if (visTileBorder) ApplyTileBorder();
     }
 
     private void UpdateDepthRange(Tile[] tiles)
@@ -85,8 +87,8 @@ public class DepthBufferVisualizer : MonoBehaviour
         {
             for (var col = 0; col < Constants.SubTileWidth; col++)
             {
-                var idx = row * Constants.SubTileWidth + col;
-                var bitValue = (bitmask >> idx) & 1;
+                var idx = (Constants.SubTileHeight - 1 - row) * Constants.SubTileWidth + col;
+                var bitValue = (bitmask >> (31 - idx)) & 1;
                 var pixelRow = pixelRowStart + row;
                 var pixelCol = pixelColStart + col;
 
@@ -110,7 +112,20 @@ public class DepthBufferVisualizer : MonoBehaviour
             }
         }
     }
-        
+
+    private void ApplyTileBorder()
+    {
+        for (var y = 0; y < depthBuffer.height; y++)
+        {
+            for (var x = 0; x < depthBuffer.width; x++)
+            {
+                if (x % Constants.TileWidth != 0 && y % Constants.TileHeight != 0) continue;
+                var color = depthBuffer.GetPixel(x, y) * 0.5f;
+                depthBuffer.SetPixel(x, y, new Color(color.r, color.g, color.b, 1.0f));
+            }
+        }
+    }
+    
     private void SaveTextureAsPNG(string path)
     {
         var pngBytes = depthBuffer.EncodeToPNG();

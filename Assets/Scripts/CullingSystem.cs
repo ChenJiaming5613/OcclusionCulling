@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using System.Linq;
 using MOC;
 using Unity.Collections;
 using UnityEngine;
@@ -6,8 +7,7 @@ using UnityEngine;
 [RequireComponent(typeof(Camera))]
 public class CullingSystem : MonoBehaviour
 {
-    public float costTimeFrustumCulling;
-    public float costTimeMaskedOcclusionCulling;
+    public CullingSystemStatData StatData;
     
     [SerializeField] private MeshRenderer[] occludersMeshRenderers;
     [SerializeField] private MeshRenderer[] occludeesMeshRenderers;
@@ -18,9 +18,13 @@ public class CullingSystem : MonoBehaviour
     private NativeArray<Bounds> _bounds;
     private NativeArray<bool> _cullingResults; // true -> invisible; false -> visible
     private readonly Stopwatch _stopwatch = new();
+    // private int _occludedLayer;
+    // private int _defaultLayer;
 
     private void Start()
     {
+        // _occludedLayer = LayerMask.NameToLayer("MSOC_Occluded");
+        // _defaultLayer = LayerMask.NameToLayer("Default");
         _camera = GetComponent<Camera>();
         
         _meshRenderers = new MeshRenderer[occludersMeshRenderers.Length + occludeesMeshRenderers.Length];
@@ -48,6 +52,8 @@ public class CullingSystem : MonoBehaviour
         _maskedOcclusionCulling =
             new MaskedOcclusionCulling(_camera, occludersMeshRenderers,
                 new NativeSlice<Bounds>(_bounds, occludersMeshRenderers.Length), _cullingResults);
+        StatData.TotalObjectCount = _cullingResults.Length;
+        StatData.FrustumCullingCount = -1; // 标记是否开始统计
     }
 
     private void OnDestroy()
@@ -63,12 +69,19 @@ public class CullingSystem : MonoBehaviour
         _stopwatch.Restart();
         _frustumCulling.Cull();
         _stopwatch.Stop();
-        costTimeFrustumCulling = _stopwatch.ElapsedTicks * 1000f / Stopwatch.Frequency;
+        StatData.CostTimeFrustumCulling = _stopwatch.ElapsedTicks * 1000f / Stopwatch.Frequency;
+        StatData.FrustumCullingCount = _cullingResults.Sum(it => it ? 1 : 0);
 
         _stopwatch.Restart();
         _maskedOcclusionCulling.Cull();
         _stopwatch.Stop();
-        costTimeMaskedOcclusionCulling = _stopwatch.ElapsedTicks * 1000f / Stopwatch.Frequency;
+        StatData.CostTimeMaskedOcclusionCulling = _stopwatch.ElapsedTicks * 1000f / Stopwatch.Frequency;
+        StatData.MaskedOcclusionCullingCount = _cullingResults.Sum(it => it ? 1 : 0) - StatData.FrustumCullingCount;
+        
+        // for (var i = 0; i < _cullingResults.Length; i++)
+        // {
+        //     _meshRenderers[i].gameObject.layer = _cullingResults[i] ? _occludedLayer : _defaultLayer;
+        // }
     }
 
     public void SetOccludersAndOccludees(MeshRenderer[] occluders, MeshRenderer[] occludees)
@@ -96,4 +109,13 @@ public class CullingSystem : MonoBehaviour
     {
         return _maskedOcclusionCulling;
     }
+}
+
+public struct CullingSystemStatData
+{
+    public float CostTimeFrustumCulling;
+    public float CostTimeMaskedOcclusionCulling;
+    public int TotalObjectCount;
+    public int FrustumCullingCount;
+    public int MaskedOcclusionCullingCount;
 }

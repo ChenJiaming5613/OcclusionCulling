@@ -1,14 +1,13 @@
 ﻿using System.Collections.Generic;
-using System.Linq;
 using MOC;
 using UnityEngine;
 
 [RequireComponent(typeof(CullingSystem))]
 public class CullingVisualizer : MonoBehaviour
 {
+    [SerializeField] private bool enableVisOccluders;
     private CullingSystem _cullingSystem;
     private MaskedOcclusionCulling _occlusionCulling;
-    private readonly Dictionary<Renderer, Color> _rendererToColor = new();
 
     private void Start()
     {
@@ -17,27 +16,31 @@ public class CullingVisualizer : MonoBehaviour
 
     private void Update()
     {
-        var occludeesMeshRenderers = _cullingSystem.GetMeshRenderers();
-        var occludeResults = _cullingSystem.GetCullingResults();
+        var meshRenderers = _cullingSystem.GetMeshRenderers();
+        var cullingResults = _cullingSystem.GetCullingResults();
+        _occlusionCulling ??= _cullingSystem.GetMaskedOcclusionCulling();
+        var occluderFlags = _occlusionCulling.GetOccluderFlags();
+        var numOccluders = occluderFlags.Length;
         var occludedMeshRenderers = new List<MeshRenderer>();
-        for (var i = 0; i < occludeResults.Length; i++)
+        var visibleMeshRenderers = new List<MeshRenderer>();
+        var occluderMeshRenderers = new List<MeshRenderer>();
+        for (var i = 0; i < cullingResults.Length; i++)
         {
-            if (occludeResults[i]) occludedMeshRenderers.Add(occludeesMeshRenderers[i]);
+            var meshRenderer = meshRenderers[i];
+            if (cullingResults[i]) occludedMeshRenderers.Add(meshRenderer);
+            else if (enableVisOccluders && i < numOccluders && occluderFlags[i]) occluderMeshRenderers.Add(meshRenderer);
+            else visibleMeshRenderers.Add(meshRenderer);
         }
-            
-        var meshFiltersSet = new HashSet<Renderer>();
-        foreach (var meshRenderer in occludedMeshRenderers)
+        ChangeRenderersColor(visibleMeshRenderers, Color.gray);
+        ChangeRenderersColor(occluderMeshRenderers, Color.green);
+        ChangeRenderersColor(occludedMeshRenderers, Color.red);
+    }
+
+    private static void ChangeRenderersColor(List<MeshRenderer> renderers, Color color)
+    {
+        foreach (var currRenderer in renderers)
         {
-            if (!_rendererToColor.ContainsKey(meshRenderer))
-            {
-                _rendererToColor.Add(meshRenderer, meshRenderer.material.color);
-            }
-            meshRenderer.material.color = Color.red;
-            meshFiltersSet.Add(meshRenderer);
-        }
-        foreach (var pair in _rendererToColor.Where(pair => !meshFiltersSet.Contains(pair.Key)))
-        {
-            pair.Key.material.color = pair.Value;
+            currRenderer.material.color = color;
         }
     }
 }

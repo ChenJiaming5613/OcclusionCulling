@@ -28,10 +28,11 @@ public class DepthBufferVisualizer : MonoBehaviour
 
     private void CreateDepthBufferIfNeeded()
     {
-        if (!depthBuffer || depthBuffer.width != Constants.ScreenWidth ||
-            depthBuffer.height != Constants.ScreenHeight)
+        var config = _moc.GetConfig();
+        if (!depthBuffer || depthBuffer.width != config.DepthBufferWidth ||
+            depthBuffer.height != config.DepthBufferHeight)
         {
-            depthBuffer = new Texture2D(Constants.ScreenWidth, Constants.ScreenHeight, TextureFormat.ARGB32, false)
+            depthBuffer = new Texture2D(config.DepthBufferWidth, config.DepthBufferHeight, TextureFormat.ARGB32, false)
             {
                 wrapMode = TextureWrapMode.Clamp,
                 filterMode = FilterMode.Point
@@ -42,11 +43,12 @@ public class DepthBufferVisualizer : MonoBehaviour
     private void UpdateDepthBuffer()
     {
         var tiles = _moc.GetTiles();
+        var config = _moc.GetConfig();
         UpdateDepthRange(tiles);
         for (var i = 0; i < tiles.Length; i++)
         {
-            var tileRow = i / Constants.NumColsTile;
-            var tileCol = i % Constants.NumColsTile;
+            var tileRow = i / config.NumColsTile;
+            var tileCol = i % config.NumColsTile;
             UpdateTile(tileRow, tileCol, tiles[i]);
         }
         if (visTileBorder) ApplyTileBorder();
@@ -71,10 +73,10 @@ public class DepthBufferVisualizer : MonoBehaviour
     private void UpdateTile(int tileRow, int tileCol, in Tile tile)
     {
         // NumRowsSubTile = 1
-        for (var subTileCol = 0; subTileCol < Constants.NumColsSubTile; subTileCol++)
+        for (var subTileCol = 0; subTileCol < MocConfig.NumColsSubTile; subTileCol++)
         {
-            var pixelRowStart = tileRow * Constants.TileHeight;
-            var pixelColStart = tileCol * Constants.TileWidth + subTileCol * Constants.SubTileWidth;
+            var pixelRowStart = tileRow * MocConfig.TileHeight;
+            var pixelColStart = tileCol * MocConfig.TileWidth + subTileCol * MocConfig.SubTileWidth;
             var bitmask = tile.bitmask[subTileCol];
             var z = tile.z[subTileCol];
             UpdateSubTile(pixelRowStart, pixelColStart, bitmask, z);
@@ -83,11 +85,11 @@ public class DepthBufferVisualizer : MonoBehaviour
 
     private void UpdateSubTile(int pixelRowStart, int pixelColStart, uint bitmask, float z)
     {
-        for (var row = 0; row < Constants.SubTileHeight; row++)
+        for (var row = 0; row < MocConfig.SubTileHeight; row++)
         {
-            for (var col = 0; col < Constants.SubTileWidth; col++)
+            for (var col = 0; col < MocConfig.SubTileWidth; col++)
             {
-                var idx = (Constants.SubTileHeight - 1 - row) * Constants.SubTileWidth + col;
+                var idx = (MocConfig.SubTileHeight - 1 - row) * MocConfig.SubTileWidth + col;
                 var bitValue = (bitmask >> (31 - idx)) & 1;
                 var pixelRow = pixelRowStart + row;
                 var pixelCol = pixelColStart + col;
@@ -119,7 +121,7 @@ public class DepthBufferVisualizer : MonoBehaviour
         {
             for (var x = 0; x < depthBuffer.width; x++)
             {
-                if (x % Constants.TileWidth != 0 && y % Constants.TileHeight != 0) continue;
+                if (x % MocConfig.TileWidth != 0 && y % MocConfig.TileHeight != 0) continue;
                 var color = depthBuffer.GetPixel(x, y) * 0.5f;
                 depthBuffer.SetPixel(x, y, new Color(color.r, color.g, color.b, 1.0f));
             }

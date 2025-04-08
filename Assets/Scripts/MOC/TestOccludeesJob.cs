@@ -9,17 +9,24 @@ namespace MOC
     [BurstCompile]
     public struct TestOccludeesJob : IJobParallelFor
     {
+        public int NumOccluders;
+        public int DepthBufferWidth;
+        public int DepthBufferHeight;
+        public int NumColsTile;
+        public float4x4 VpMatrix;
         [ReadOnly] public NativeSlice<Bounds> Bounds;
         [ReadOnly] public NativeArray<Tile> Tiles;
+        [ReadOnly] public NativeArray<bool> OccluderFlags;
         // [NativeDisableParallelForRestriction] public NativeArray<Tile> Tiles;
-        public float4x4 VpMatrix;
         public NativeSlice<bool> CullingResults;
         
-        public void Execute(int objIdx)
+        public void Execute(int objIdx) // TODO: 没有执行？！！
         {
             if (CullingResults[objIdx]) return;
-            ComputeRectAndClosestDepth(Bounds[objIdx], VpMatrix, out var rect, out var closestDepth);
-            var tileSize = new int2(Constants.TileWidth, Constants.TileHeight);
+            if (objIdx < NumOccluders && OccluderFlags[objIdx]) return;
+            var depthBufferSize = new int2(DepthBufferWidth, DepthBufferHeight);
+            ComputeRectAndClosestDepth(depthBufferSize, Bounds[objIdx], VpMatrix, out var rect, out var closestDepth);
+            var tileSize = new int2(MocConfig.TileWidth, MocConfig.TileHeight);
             var tileMin = rect.xz / tileSize;
             var tileMax = rect.yw / tileSize;
             for (var tileY = tileMin.y; tileY <= tileMax.y; tileY++)
@@ -27,10 +34,10 @@ namespace MOC
                 for (var tileX = tileMin.x; tileX <= tileMax.x; tileX++)
                 {
                     var tileRect = new int4(
-                        tileX * Constants.TileWidth,
-                        (tileX + 1) * Constants.TileWidth - 1,
-                        tileY * Constants.TileHeight,
-                        (tileY + 1) * Constants.TileHeight - 1
+                        tileX * MocConfig.TileWidth,
+                        (tileX + 1) * MocConfig.TileWidth - 1,
+                        tileY * MocConfig.TileHeight,
+                        (tileY + 1) * MocConfig.TileHeight - 1
                     );
                     var intersectRect = ComputeRectIntersection(tileRect, rect);
 
@@ -40,7 +47,7 @@ namespace MOC
                     // var tmp = ToBinaryString(coverage);
                     // Debug.Log(tmp);
                     var bitmask = ShuffleBitmask(coverage);
-                    var tileIdx = tileY * Constants.NumColsTile + tileX;
+                    var tileIdx = tileY * NumColsTile + tileX;
                     var tile = Tiles[tileIdx];
                     var isOccluded = true;
                     for (var i = 0; i < 4; i++)
@@ -64,7 +71,7 @@ namespace MOC
         }
 
         private static void ComputeRectAndClosestDepth(
-            in Bounds bounds, in float4x4 mvpMatrix,
+            in int2 depthBufferSize, in Bounds bounds, in float4x4 mvpMatrix,
             out int4 rect, out float closestDepth
         )
         {
@@ -82,7 +89,7 @@ namespace MOC
             var screenMin = new int2(int.MaxValue, int.MaxValue);
             var screenMax = new int2(int.MinValue, int.MinValue);
 
-            var screenSize = new int3(Constants.ScreenWidth, Constants.ScreenHeight, 1);
+            var screenSize = new int3(depthBufferSize, 1);
             closestDepth = float.MaxValue;
             for (var i = 0; i < 8; i++)
             {

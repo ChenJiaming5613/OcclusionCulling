@@ -47,7 +47,6 @@ public class PerfInfoDisplay : MonoBehaviour
         text.text = $"Cost Time: {deltaTime * 1000:F2}ms {1.0f / deltaTime:F2}fps" +
                     $"\nSSE Support: {QuerySimdSupport.SupportSse()}" +
                     $"\nNeon Support: {QuerySimdSupport.SupportNeon()}" +
-                    $"\nBuffer Size: {Constants.ScreenWidth}x{Constants.ScreenHeight}" +
                     "\n==========================" +
                     $"{GetFCStatStr()}" +
                     "\n==========================" +
@@ -65,7 +64,9 @@ public class PerfInfoDisplay : MonoBehaviour
     private string GetMsocStatStr()
     {
         if (_msoc == null) return "";
-        return $"\nMSOC: {_msocIndicator.GetStatusStr()}" +
+        var config = _msoc.GetConfig();
+        return $"\nBuffer Size: {config.DepthBufferWidth}x{config.DepthBufferHeight}" +
+               $"\nMSOC: {_msocIndicator.GetStatusStr()}" +
                $"\nOccluders: {_occludersIndicator.GetStatusStr()}" +
                $"\nOccludees: {_occludeesIndicator.GetStatusStr()}" +
                $"\nClear: {_clearIndicator.GetStatusStr()}" +

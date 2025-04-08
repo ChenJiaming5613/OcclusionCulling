@@ -8,51 +8,33 @@ using UnityEngine;
 public class CullingSystem : MonoBehaviour
 {
     public CullingSystemStatData StatData;
-    
-    [SerializeField] private MeshRenderer[] occludersMeshRenderers;
-    [SerializeField] private MeshRenderer[] occludeesMeshRenderers;
+    [SerializeField] private MocConfigAsset configAsset;
+
     private FrustumCulling _frustumCulling;
     private MaskedOcclusionCulling _maskedOcclusionCulling;
     private Camera _camera;
     private MeshRenderer[] _meshRenderers;
+    private MeshRenderer[] _occluderMeshRenderers;
     private NativeArray<Bounds> _bounds;
     private NativeArray<bool> _cullingResults; // true -> invisible; false -> visible
     private readonly Stopwatch _stopwatch = new();
-    // private int _occludedLayer;
-    // private int _defaultLayer;
 
     private void Start()
     {
-        // _occludedLayer = LayerMask.NameToLayer("MSOC_Occluded");
-        // _defaultLayer = LayerMask.NameToLayer("Default");
         _camera = GetComponent<Camera>();
-        
-        _meshRenderers = new MeshRenderer[occludersMeshRenderers.Length + occludeesMeshRenderers.Length];
-        {
-            var idx = 0;
-            foreach (var meshRenderer in occludersMeshRenderers)
-            {
-                _meshRenderers[idx++] = meshRenderer;
-            }
 
-            foreach (var meshRenderer in occludeesMeshRenderers)
-            {
-                _meshRenderers[idx++] = meshRenderer;
-            }
-        }
-        
-        _bounds = new NativeArray<Bounds>(_meshRenderers.Length, Allocator.Persistent);
-        for (var i = 0; i < _bounds.Length; i++) // TODO: only process static objects
+        var numObjects = _meshRenderers.Length;
+        _bounds = new NativeArray<Bounds>(numObjects, Allocator.Persistent);
+        for (var i = 0; i < numObjects; i++) // TODO: only process static objects
         {
-            var meshRenderer = _meshRenderers[i];
-            _bounds[i] = meshRenderer.bounds;
+            _bounds[i] = _meshRenderers[i].bounds;
         }
-        _cullingResults = new NativeArray<bool>(_meshRenderers.Length, Allocator.Persistent);
+        _cullingResults = new NativeArray<bool>(numObjects, Allocator.Persistent);
+
         _frustumCulling = new FrustumCulling(_camera, _bounds, _cullingResults);
-        _maskedOcclusionCulling =
-            new MaskedOcclusionCulling(_camera, occludersMeshRenderers,
-                new NativeSlice<Bounds>(_bounds, occludersMeshRenderers.Length), _cullingResults);
-        StatData.TotalObjectCount = _cullingResults.Length;
+        _maskedOcclusionCulling = new MaskedOcclusionCulling(configAsset, _camera, _bounds, _occluderMeshRenderers, _cullingResults);
+
+        StatData.TotalObjectCount = numObjects;
         StatData.FrustumCullingCount = -1; // 标记是否开始统计
     }
 
@@ -66,6 +48,8 @@ public class CullingSystem : MonoBehaviour
 
     private void Update()
     {
+        _maskedOcclusionCulling.SyncPrevFrame();
+
         _stopwatch.Restart();
         _frustumCulling.Cull();
         _stopwatch.Stop();
@@ -77,17 +61,21 @@ public class CullingSystem : MonoBehaviour
         _stopwatch.Stop();
         StatData.CostTimeMaskedOcclusionCulling = _stopwatch.ElapsedTicks * 1000f / Stopwatch.Frequency;
         StatData.MaskedOcclusionCullingCount = _cullingResults.Sum(it => it ? 1 : 0) - StatData.FrustumCullingCount;
-        
-        // for (var i = 0; i < _cullingResults.Length; i++)
-        // {
-        //     _meshRenderers[i].gameObject.layer = _cullingResults[i] ? _occludedLayer : _defaultLayer;
-        // }
     }
 
-    public void SetOccludersAndOccludees(MeshRenderer[] occluders, MeshRenderer[] occludees)
+    public void SetMeshRenderers(MeshRenderer[] occluderMeshRenderers, MeshRenderer[] occludeeMeshRenderers)
     {
-        occludersMeshRenderers = occluders;
-        occludeesMeshRenderers = occludees;
+        _occluderMeshRenderers = occluderMeshRenderers;
+        _meshRenderers = new MeshRenderer[occluderMeshRenderers.Length + occludeeMeshRenderers.Length];
+        var idx = 0;
+        foreach (var meshRenderer in occluderMeshRenderers)
+        {
+            _meshRenderers[idx++] = meshRenderer;
+        }
+        foreach (var meshRenderer in occludeeMeshRenderers)
+        {
+            _meshRenderers[idx++] = meshRenderer;
+        }
     }
 
     public MeshRenderer[] GetMeshRenderers()

@@ -8,6 +8,9 @@ namespace MOC
     [BurstCompile]
     public struct PrepareTriangleInfosJob : IJobParallelFor
     {
+        public int NumRowsTile;
+        public int NumColsTile;
+        
         [ReadOnly] public NativeArray<float3> ScreenSpaceVertices;
         
         [WriteOnly] public NativeArray<int4> TileRanges;
@@ -43,10 +46,10 @@ namespace MOC
             var pixelMinY = math.min(math.min(v0.y, v1.y), v2.y);
             var pixelMaxY = math.max(math.max(v0.y, v1.y), v2.y);
 
-            var tileMinX = math.clamp((int)math.floor(pixelMinX / Constants.TileWidth), 0, Constants.NumColsTile - 1);
-            var tileMinY = math.clamp((int)math.floor(pixelMinY / Constants.TileHeight), 0, Constants.NumRowsTile - 1);
-            var tileMaxX = math.clamp((int)math.ceil(pixelMaxX / Constants.TileWidth), 0, Constants.NumColsTile - 1);
-            var tileMaxY = math.clamp((int)math.ceil(pixelMaxY / Constants.TileHeight), 0, Constants.NumRowsTile - 1);
+            var tileMinX = math.clamp((int)math.floor(pixelMinX / MocConfig.TileWidth), 0, NumColsTile - 1);
+            var tileMinY = math.clamp((int)math.floor(pixelMinY / MocConfig.TileHeight), 0, NumRowsTile - 1);
+            var tileMaxX = math.clamp((int)math.ceil(pixelMaxX / MocConfig.TileWidth), 0, NumColsTile - 1);
+            var tileMaxY = math.clamp((int)math.ceil(pixelMaxY / MocConfig.TileHeight), 0, NumRowsTile - 1);
             var tileRange = new int4(tileMinX, tileMinY, tileMaxX, tileMaxY);
             TileRanges[triIdx] = tileRange;
             
@@ -97,11 +100,11 @@ namespace MOC
             
             ComputeDepthPlane(v0, v1, v2, out var zPixelDx, out var zPixelDy);
             var zTriMax = math.max(math.max(v0.z, v1.z), v2.z);
-            var zSubTileDx = zPixelDx * Constants.SubTileWidth;
-            var zSubTileDy = zPixelDy * Constants.SubTileHeight;
+            var zSubTileDx = zPixelDx * MocConfig.SubTileWidth;
+            var zSubTileDy = zPixelDy * MocConfig.SubTileHeight;
             var zTileMinBase = v0.z
-                  + zPixelDx * (tileMinX * Constants.TileWidth - v0.x)
-                  + zPixelDy * (tileMinY * Constants.TileHeight - v0.y);
+                  + zPixelDx * (tileMinX * MocConfig.TileWidth - v0.x)
+                  + zPixelDy * (tileMinY * MocConfig.TileHeight - v0.y);
             var zSubTileMax = zTileMinBase + (zSubTileDx > 0 ? zSubTileDx : 0) + (zSubTileDy > 0 ? zSubTileDy : 0);
             DepthParams[triIdx] = new float4(zSubTileDx, zSubTileDy, zTriMax, zSubTileMax);
         }

@@ -33,7 +33,7 @@ public class FastApplyOccludersAndOccludees : MonoBehaviour
                 .Where(it => it.gameObject.activeSelf).ToArray();
             Debug.Log($"Num Occludees: {occludeesMeshRenderers.Length}");
         }
-        _cullingSystem.SetOccludersAndOccludees(occludersMeshRenderers, occludeesMeshRenderers);
+        _cullingSystem.SetMeshRenderers(occludersMeshRenderers, occludeesMeshRenderers);
         
         // Apply Camera Pose
         var eye = targetGameObject.transform.Find("Eye");

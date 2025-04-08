@@ -61,9 +61,9 @@ public class FrustumCulling
         [ReadOnly] public NativeArray<Bounds> Bounds;
         [WriteOnly] public NativeArray<bool> CullingResults;
     
-        public void Execute(int index)
+        public void Execute(int objIdx)
         {
-            var bounds = Bounds[index];
+            var bounds = Bounds[objIdx];
             var isOccluded = false;
             
             foreach (var plane in Planes)
@@ -83,7 +83,7 @@ public class FrustumCulling
                 }
             }
 
-            CullingResults[index] = isOccluded;
+            CullingResults[objIdx] = isOccluded;
         }
     }
 }

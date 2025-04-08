@@ -9,6 +9,9 @@ namespace MOC
     public struct BinRasterizerJob : IJobParallelFor
     {
         public int NumTris;
+        public int NumRowsTile;
+        public int NumColsTile;
+        public int NumColsTileInBin;
         [ReadOnly] public NativeArray<int4> TileRanges; // 三角形整个的range,需要clamp到bin中
         // [ReadOnly] public NativeArray<int3x3> EdgeParams;
         [ReadOnly] public NativeArray<float4> DepthParams;
@@ -23,10 +26,10 @@ namespace MOC
         public void Execute(int binIdx)
         {
             var binRange = new int4(
-                binIdx * Constants.NumColsTileInBin,
+                binIdx * NumColsTileInBin,
                 0,
-                (binIdx + 1) * Constants.NumColsTileInBin - 1,
-                Constants.NumRowsTile - 1
+                (binIdx + 1) * NumColsTileInBin - 1,
+                NumRowsTile - 1
             );
             for (var triIdx = 0; triIdx < NumTris; triIdx++)
             {
@@ -44,8 +47,8 @@ namespace MOC
             var tileRangeOffset = clampedTileRange.xy - tileRange.xy;
             
             var depthParam = DepthParams[triIdx];
-            var zTileDx = depthParam.x * Constants.NumColsSubTile;
-            var zTileDy = depthParam.y * Constants.NumRowsSubTile;
+            var zTileDx = depthParam.x * MocConfig.NumColsSubTile;
+            var zTileDy = depthParam.y * MocConfig.NumRowsSubTile;
             var zTileRow = depthParam.w + tileRangeOffset.x * zTileDx + tileRangeOffset.y * zTileDy;
             
             // var edgeParam = EdgeParams[triIdx];
@@ -73,13 +76,13 @@ namespace MOC
                 isRightEdge = new bool3(isRightEdge[0], isRightEdge[2], isRightEdge[1]);
             }
             
-            var y = new int4(0, 1, 2, 3) + clampedTileRange.y * Constants.TileHeight;
+            var y = new int4(0, 1, 2, 3) + clampedTileRange.y * MocConfig.TileHeight;
             var x0 = new float4(y - vy[0]) * invSlope[0] + vx[0];
             var x1 = new float4(y - vy[1]) * invSlope[1] + vx[1];
             var x2 = flatInfo.x == -1 ? new float4(y - vy[2]) * invSlope[2] + vx[2] : new float4();
-            var dx0 = Constants.TileHeight * invSlope[0];
-            var dx1 = Constants.TileHeight * invSlope[1];
-            var dx2 = Constants.TileHeight * invSlope[2];
+            var dx0 = MocConfig.TileHeight * invSlope[0];
+            var dx1 = MocConfig.TileHeight * invSlope[1];
+            var dx2 = MocConfig.TileHeight * invSlope[2];
             var rightMask = math.select(0u, ~0u, isRightEdge);
             var zSubTileDx = depthParam.x;
             var zTriMax = depthParam.z;
@@ -88,8 +91,8 @@ namespace MOC
             {
                 var z = zTileRow + zOffsets;
                 var tileX = clampedTileRange.x;
-                var tileIdx = tileY * Constants.NumColsTile + tileX;
-                var xStart = tileX * Constants.TileWidth;
+                var tileIdx = tileY * NumColsTile + tileX;
+                var xStart = tileX * MocConfig.TileWidth;
                 for (; tileX <= clampedTileRange.z; tileX++)
                 {
                     var ix0 = math.clamp(new int4(x0 - xStart), 0, 32);
@@ -106,10 +109,10 @@ namespace MOC
 
                     z += zTileDx;
                     tileIdx++;
-                    xStart += Constants.TileWidth;
+                    xStart += MocConfig.TileWidth;
                 }
                 zTileRow += zTileDy;
-                y += Constants.TileHeight;
+                y += MocConfig.TileHeight;
                 x0 += dx0;
                 x1 += dx1;
                 x2 += dx2;

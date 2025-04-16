@@ -15,6 +15,7 @@ namespace MOC
 
         private readonly MocConfig _config;
         private readonly Camera _camera;
+        private readonly int _numBins;
         private NativeArray<Tile> _tiles;
         private Matrix4x4 _vpMatrix;
 
@@ -34,6 +35,7 @@ namespace MOC
         private NativeArray<bool> _occluderFlags;
         private NativeArray<int> _occluderNumTri;
         private NativeArray<int> _fillOffsets;
+        private NativeArray<OccluderSortInfo> _occluderInfos;
 
         // triangles
         private NativeArray<int> _numRasterizeTris;
@@ -61,6 +63,7 @@ namespace MOC
         {
             _config = new MocConfig(configAsset);
             _camera = camera;
+            _numBins = _config.NumBinCols * _config.NumBinRows;
             _numObjects = bounds.Length;
             _bounds = bounds;
             _cullingResults = cullingResults;
@@ -82,7 +85,8 @@ namespace MOC
             _occluderFlags = new NativeArray<bool>(_numOccluders, Allocator.Persistent);
             _occluderNumTri = new NativeArray<int>(_numOccluders, Allocator.Persistent);
             _fillOffsets = new NativeArray<int>(_numOccluders, Allocator.Persistent);
-            var numTotalTris = 0;
+            _occluderInfos = new NativeArray<OccluderSortInfo>(_numOccluders, Allocator.Persistent);
+            // var numTotalTris = 0;
             {
                 var idxVertex = 0;
                 var idxIndex = 0;
@@ -107,21 +111,22 @@ namespace MOC
                     numVertices += mesh.vertices.Length;
                     numIndices += mesh.triangles.Length;
                     _occluderNumTri[i] = mesh.triangles.Length / 3;
-                    numTotalTris += _occluderNumTri[i];
+                    // numTotalTris += _occluderNumTri[i];
                     _modelMatrices[i] = occluderMeshFilters[i].transform.localToWorldMatrix; // TODO: only process static occluders
                 }
             }
 
             // triangles
+            var maxNumRasterizeTris = _config.MaxNumRasterizeTris;
             _numRasterizeTris = new NativeArray<int>(1, Allocator.Persistent);
-            _screenSpaceVertices = new NativeArray<float3>(numTotalTris * 3, Allocator.Persistent);
-            _tileRanges = new NativeArray<int4>(numTotalTris, Allocator.Persistent);
-            _invSlope = new NativeArray<float3>(numTotalTris, Allocator.Persistent);
-            _vx = new NativeArray<int3>(numTotalTris, Allocator.Persistent);
-            _vy = new NativeArray<int3>(numTotalTris, Allocator.Persistent);
-            _isRightEdge = new NativeArray<bool3>(numTotalTris, Allocator.Persistent);
-            _flatInfo = new NativeArray<int3>(numTotalTris, Allocator.Persistent);
-            _depthParams = new NativeArray<float4>(numTotalTris, Allocator.Persistent);
+            _screenSpaceVertices = new NativeArray<float3>(maxNumRasterizeTris * 3, Allocator.Persistent);
+            _tileRanges = new NativeArray<int4>(maxNumRasterizeTris, Allocator.Persistent);
+            _invSlope = new NativeArray<float3>(maxNumRasterizeTris, Allocator.Persistent);
+            _vx = new NativeArray<int3>(maxNumRasterizeTris, Allocator.Persistent);
+            _vy = new NativeArray<int3>(maxNumRasterizeTris, Allocator.Persistent);
+            _isRightEdge = new NativeArray<bool3>(maxNumRasterizeTris, Allocator.Persistent);
+            _flatInfo = new NativeArray<int3>(maxNumRasterizeTris, Allocator.Persistent);
+            _depthParams = new NativeArray<float4>(maxNumRasterizeTris, Allocator.Persistent);
         }
 
         public void Dispose()
@@ -140,6 +145,7 @@ namespace MOC
             _occluderFlags.Dispose();
             _occluderNumTri.Dispose();
             _fillOffsets.Dispose();
+            _occluderInfos.Dispose();
 
             // triangles
             _numRasterizeTris.Dispose();
@@ -184,7 +190,7 @@ namespace MOC
             // Step0: Clear Tiles
             _stopwatch.Restart();
             Profiler.BeginSample("ClearTiles");
-            ClearTiles(); // TODO: 改成 job system
+            ClearTiles();
             Profiler.EndSample();
             _stopwatch.Stop();
             StatData.CostTimeClear = GetCostTime();
@@ -241,7 +247,8 @@ namespace MOC
                 VpMatrix = _vpMatrix,
                 CoverageThreshold = _config.CoverageThreshold,
                 MvpMatrices = _mvpMatrices,
-                OccluderFlags = _occluderFlags
+                OccluderFlags = _occluderFlags,
+                OccluderInfos = _occluderInfos,
             };
             return updateMvpAndSelectOccludersJob.Schedule(_numOccluders, 64);
         }
@@ -250,12 +257,14 @@ namespace MOC
         {
             var updateMatricesJob = new UpdateFillOffsetsJob
             {
+                MaxNumRasterizeTris = _config.MaxNumRasterizeTris,
                 NumOccluders = _numOccluders,
-                CullingResults = _cullingResults,
-                OccluderFlags = _occluderFlags,
+                // CullingResults = _cullingResults,
+                // OccluderFlags = _occluderFlags,
                 OccluderNumTri = _occluderNumTri,
                 FillOffsets = _fillOffsets,
-                NumRasterizeTris = _numRasterizeTris
+                NumRasterizeTris = _numRasterizeTris,
+                OccluderInfos = _occluderInfos
             };
             updateMatricesJob.Run();
 
@@ -269,8 +278,9 @@ namespace MOC
                 IndexOffsets = _indexOffsets,
                 MvpMatrices = _mvpMatrices,
                 FillOffsets = _fillOffsets,
-                CullingResults = _cullingResults,
-                OccluderFlags = _occluderFlags,
+                // CullingResults = _cullingResults,
+                // OccluderFlags = _occluderFlags,
+                OccluderInfos = _occluderInfos,
                 ScreenSpaceVertices = _screenSpaceVertices
             };
             var transformVerticesJobHandle = transformVerticesJob.Schedule(_numOccluders, 64);
@@ -298,6 +308,9 @@ namespace MOC
                 NumRowsTile = _config.NumRowsTile,
                 NumColsTile = _config.NumColsTile,
                 NumColsTileInBin = _config.NumColsTileInBin,
+                NumRowsTileInBin = _config.NumRowsTileInBin,
+                NumBinCols = _config.NumBinCols,
+                NumBinRows = _config.NumBinRows,
                 TileRanges = _tileRanges,
                 InvSlope = _invSlope,
                 Vx = _vx,
@@ -316,7 +329,7 @@ namespace MOC
             // StatData.ClippedTriCount = clippingTriCount;
             
             // binRasterizerJob.Run(Constants.NumBins);
-            return binRasterizerJob.Schedule(MocConfig.NumBins, 1, prepareTriangleInfosJobHandle);
+            return binRasterizerJob.Schedule(_numBins, 1, prepareTriangleInfosJobHandle);
         }
 
         private JobHandle TestOccludees()

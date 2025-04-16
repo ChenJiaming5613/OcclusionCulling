@@ -12,7 +12,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: df86f45ffe6646b0941cefa97ac4c328, type: 3}
   m_Name: Medium Moc Config Asset
   m_EditorClassIdentifier: 
+  numBinCols: 4
+  numBinRows: 1
   depthBufferWidth: 960
   depthBufferHeight: 540
   coverageThreshold: 0
   asyncRasterizeOccluders: 0
+  maxNumRasterizeTris: 6356

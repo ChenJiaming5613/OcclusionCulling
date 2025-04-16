@@ -16,22 +16,26 @@ namespace MOC
         [ReadOnly] public NativeArray<int> IndexOffsets;
         [ReadOnly] public NativeArray<float4x4> MvpMatrices;
         [ReadOnly] public NativeArray<int> FillOffsets;
-        [ReadOnly] public NativeArray<bool> CullingResults;
-        [ReadOnly] public NativeArray<bool> OccluderFlags;
+        // [ReadOnly] public NativeArray<bool> CullingResults;
+        // [ReadOnly] public NativeArray<bool> OccluderFlags;
+        [ReadOnly] public NativeArray<OccluderSortInfo> OccluderInfos;
 
         [NativeDisableParallelForRestriction] [WriteOnly]
         public NativeArray<float3> ScreenSpaceVertices;
         
-        public void Execute(int objIdx)
+        public void Execute(int index)
         {
-            if (!OccluderFlags[objIdx] || CullingResults[objIdx]) return;
+            var occluderInfo = OccluderInfos[index];
+            if (occluderInfo.NumRasterizeTris == 0) return;
+            // if (!OccluderFlags[objIdx] || CullingResults[objIdx]) return;
+            var objIdx = occluderInfo.Idx;
             var mvpMatrix = MvpMatrices[objIdx];
             var fillOffset = FillOffsets[objIdx] * 3;
             var vertexOffset = LocalSpaceVertexOffsets[objIdx];
             var indexStart = IndexOffsets[objIdx];
-            var indexEnd = objIdx + 1 < IndexOffsets.Length ? IndexOffsets[objIdx + 1] : Indices.Length;
+            // var indexEnd = objIdx + 1 < IndexOffsets.Length ? IndexOffsets[objIdx + 1] : Indices.Length;
             
-            for (var i = indexStart; i < indexEnd; i++)
+            for (var i = indexStart; i < indexStart + occluderInfo.NumRasterizeTris * 3; i++)
             {
                 var localSpaceVertex = new float4(LocalSpaceVertices[Indices[i] + vertexOffset], 1.0f);
                 var clipSpaceVertex = math.mul(mvpMatrix, localSpaceVertex);

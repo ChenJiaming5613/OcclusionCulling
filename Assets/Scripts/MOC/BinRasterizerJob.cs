@@ -12,6 +12,9 @@ namespace MOC
         public int NumRowsTile;
         public int NumColsTile;
         public int NumColsTileInBin;
+        public int NumRowsTileInBin;
+        public int NumBinCols;
+        public int NumBinRows;
         [ReadOnly] public NativeArray<int4> TileRanges; // 三角形整个的range,需要clamp到bin中
         // [ReadOnly] public NativeArray<int3x3> EdgeParams;
         [ReadOnly] public NativeArray<float4> DepthParams;
@@ -25,11 +28,13 @@ namespace MOC
         
         public void Execute(int binIdx)
         {
+            var binRowIdx = binIdx / NumBinCols;
+            var binColIdx = binIdx % NumBinCols;
             var binRange = new int4(
-                binIdx * NumColsTileInBin,
-                0,
-                (binIdx + 1) * NumColsTileInBin - 1,
-                NumRowsTile - 1
+                binColIdx * NumColsTileInBin,
+                binRowIdx * NumRowsTileInBin,
+                binColIdx == NumBinCols - 1 ? NumColsTile - 1 : (binColIdx + 1) * NumColsTileInBin - 1, // 防止不能整除
+                binRowIdx == NumBinRows - 1 ? NumRowsTile - 1 : (binRowIdx + 1) * NumRowsTileInBin - 1
             );
             for (var triIdx = 0; triIdx < NumTris; triIdx++)
             {

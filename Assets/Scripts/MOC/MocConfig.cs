@@ -6,32 +6,39 @@ namespace MOC
         public const int TileHeight = 4;
         public const int SubTileWidth = 8;
         public const int SubTileHeight = 4;
-        public const int NumBins = 4;
         public const int NumColsSubTile = TileWidth / SubTileWidth;
         public const int NumRowsSubTile = TileHeight / SubTileHeight;
         
-        public int DepthBufferWidth;
-        public int DepthBufferHeight;
-        public float CoverageThreshold;
-        public bool AsyncRasterizeOccluders;
+        public readonly int NumBinCols;
+        public readonly int NumBinRows;
+        public readonly int DepthBufferWidth;
+        public readonly int DepthBufferHeight;
+        public readonly float CoverageThreshold;
+        public readonly bool AsyncRasterizeOccluders;
+        public readonly int MaxNumRasterizeTris;
         // public int SubPixelPrecision = 4;
 
-        public int NumColsTile;
-        public int NumRowsTile;
-        public int BinWidth;
-        public int NumColsTileInBin;
+        public readonly int NumColsTile;
+        public readonly int NumRowsTile;
+        public readonly int NumColsTileInBin;
+        public readonly int NumRowsTileInBin;
         
         public MocConfig(MocConfigAsset configAsset)
         {
+            NumBinCols = configAsset.numBinCols;
+            NumBinRows = configAsset.numBinRows;
             DepthBufferWidth = configAsset.depthBufferWidth;
             DepthBufferHeight = configAsset.depthBufferHeight;
             CoverageThreshold = configAsset.coverageThreshold;
             AsyncRasterizeOccluders = configAsset.asyncRasterizeOccluders;
+            MaxNumRasterizeTris = configAsset.maxNumRasterizeTris;
 
             NumColsTile = DepthBufferWidth / TileWidth;
             NumRowsTile = DepthBufferHeight / TileHeight;
-            BinWidth = DepthBufferWidth / NumBins;
-            NumColsTileInBin = BinWidth / TileWidth;
+            var binWidth = DepthBufferWidth / NumBinCols;
+            NumColsTileInBin = binWidth / TileWidth;
+            var binHeight = DepthBufferHeight / NumBinRows;
+            NumRowsTileInBin = binHeight / TileHeight;
         }
     }
 }

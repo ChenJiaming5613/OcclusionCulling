@@ -16,3 +16,4 @@ MonoBehaviour:
   depthBufferHeight: 160
   coverageThreshold: 0.1
   asyncRasterizeOccluders: 0
+  maxNumRasterizeTris: 6356

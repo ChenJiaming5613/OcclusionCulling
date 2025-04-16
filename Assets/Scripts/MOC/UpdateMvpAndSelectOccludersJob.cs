@@ -44,22 +44,32 @@ namespace MOC
         /// </summary>
         [WriteOnly] public NativeArray<bool> OccluderFlags;
         
+        [WriteOnly] public NativeArray<OccluderSortInfo> OccluderInfos;
+        
         /// <summary>
         /// 对于每个遮挡物，计算屏占比如果大于阈值被判定为遮挡物，并更新mvp矩阵
         /// </summary>
         /// <param name="objIdx">物体索引</param>
         public void Execute(int objIdx)
         {
-            if (CullingResults[objIdx]) return;
+            var occluderInfo = new OccluderSortInfo { Idx = objIdx, Coverage = 0f, NumRasterizeTris = 0 };
+            if (CullingResults[objIdx])
+            {
+                OccluderInfos[objIdx] = occluderInfo;
+                return;
+            }
 
-            var occluderFlag = CalcCoverage(Bounds[objIdx], VpMatrix) >= CoverageThreshold;
+            var coverage = CalcCoverage(Bounds[objIdx], VpMatrix);
+            var occluderFlag = coverage >= CoverageThreshold;
             // TODO: 写入screen rect
             OccluderFlags[objIdx] = occluderFlag;
             if (occluderFlag)
             {
+                occluderInfo.Coverage = coverage;
                 // MvpMatrices[i] = VpMatrix * ModelMatrices[i]; // Error!
                 MvpMatrices[objIdx] = math.mul(VpMatrix, ModelMatrices[objIdx]);
             }
+            OccluderInfos[objIdx] = occluderInfo;
         }
 
         /// <summary>
@@ -90,16 +100,13 @@ namespace MOC
             for (var i = 0; i < 8; i++)
             {
                 var clipSpacePoint = math.mul(vpMatrix, new float4(points[i], 1.0f));
-                var ndcPoint = clipSpacePoint.xy / clipSpacePoint.w;
-                if (ndcPoint.x > maxX) maxX = ndcPoint.x;
-                if (ndcPoint.x < minX) minX = ndcPoint.x;
-                if (ndcPoint.y > maxY) maxY = ndcPoint.y;
-                if (ndcPoint.y < minY) minY = ndcPoint.y;
- 
-                minX = math.clamp(minX, -1, 1);
-                maxX = math.clamp(maxX, -1, 1);
-                minY = math.clamp(minY, -1, 1);
-                maxY = math.clamp(maxY, -1, 1);
+                var ndcPoint = clipSpacePoint.xyz / clipSpacePoint.w;
+                if (ndcPoint.z < 0.0f || ndcPoint.z > 1.0f) return 0.0f; // ignore near plane bounds
+                ndcPoint = math.clamp(ndcPoint, -1f, 1f);
+                maxX = math.max(maxX, ndcPoint.x);
+                minX = math.min(minX, ndcPoint.x);
+                maxY = math.max(maxY, ndcPoint.y);
+                minY = math.min(minY, ndcPoint.y);
             }
             
             var width = maxX - minX;

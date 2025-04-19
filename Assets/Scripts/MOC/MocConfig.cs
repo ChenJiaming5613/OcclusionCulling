@@ -1,6 +1,8 @@
+using Unity.Mathematics;
+
 namespace MOC
 {
-    public struct MocConfig
+    public class MocConfig
     {
         public const int TileWidth = 32;
         public const int TileHeight = 4;
@@ -22,6 +24,9 @@ namespace MOC
         public readonly int NumRowsTile;
         public readonly int NumColsTileInBin;
         public readonly int NumRowsTileInBin;
+
+        public readonly int RayMarchingDownSampleCount;
+        public readonly float3 RayMarchingStep;
         
         public MocConfig(MocConfigAsset configAsset)
         {
@@ -39,6 +44,9 @@ namespace MOC
             NumColsTileInBin = binWidth / TileWidth;
             var binHeight = DepthBufferHeight / NumBinRows;
             NumRowsTileInBin = binHeight / TileHeight;
+            
+            RayMarchingDownSampleCount = configAsset.rayMarchingDownSampleCount;
+            RayMarchingStep = configAsset.rayMarchingStep;
         }
     }
 }

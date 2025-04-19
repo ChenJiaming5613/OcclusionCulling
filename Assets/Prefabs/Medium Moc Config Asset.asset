@@ -19,3 +19,8 @@ MonoBehaviour:
   coverageThreshold: 0
   asyncRasterizeOccluders: 0
   maxNumRasterizeTris: 6356
+  rayMarchingDownSampleCount: 1
+  rayMarchingStep:
+    x: 0.5
+    y: 0.5
+    z: 0

@@ -1,4 +1,5 @@
-﻿using UnityEditor;
+﻿using System;
+using UnityEditor;
 using UnityEngine;
 
 namespace Editor
@@ -13,7 +14,14 @@ namespace Editor
             var visualizer = (DepthBufferVisualizer)target;
             if (GUILayout.Button("Visualize"))
             {
-                visualizer.Visualize();
+                try
+                {
+                    visualizer.Visualize();
+                }
+                catch (Exception)
+                {
+                    Debug.LogWarning("Pause the game first when async rasterize is on!");
+                }
             }
         }
     }

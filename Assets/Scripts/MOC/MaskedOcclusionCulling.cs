@@ -47,6 +47,8 @@ namespace MOC
         private NativeArray<bool3> _isRightEdge;
         private NativeArray<int3> _flatInfo;
         private NativeArray<float4> _depthParams;
+        
+        private TerrainRayMarching.TerrainRayMarching _terrainRayMarching;
 
         private readonly Stopwatch _stopwatch = new();
 
@@ -129,6 +131,11 @@ namespace MOC
             _depthParams = new NativeArray<float4>(maxNumRasterizeTris, Allocator.Persistent);
         }
 
+        public void VisualizeDepthTexture()
+        {
+            _terrainRayMarching.VisualizeDepthTexture();
+        }
+
         public void Dispose()
         {
             SyncPrevFrame();
@@ -157,6 +164,8 @@ namespace MOC
             _isRightEdge.Dispose();
             _flatInfo.Dispose();
             _depthParams.Dispose();
+            
+            _terrainRayMarching?.Dispose();
         }
 
         public void SyncPrevFrame()
@@ -185,6 +194,11 @@ namespace MOC
             if (_config.AsyncRasterizeOccluders) ClearAndRasterizeOccluders();
         }
 
+        public void SetTerrain(Terrain terrain)
+        {
+            _terrainRayMarching = new TerrainRayMarching.TerrainRayMarching(terrain, _camera, _config, _tiles);
+        }
+
         private void ClearAndRasterizeOccluders()
         {
             // Step0: Clear Tiles
@@ -194,7 +208,7 @@ namespace MOC
             Profiler.EndSample();
             _stopwatch.Stop();
             StatData.CostTimeClear = GetCostTime();
-            
+
             // Step1: Rasterize Occluders
             _stopwatch.Restart();
             Profiler.BeginSample("RasterizeOccluders");
@@ -205,9 +219,9 @@ namespace MOC
             StatData.CostTimeOccluders = GetCostTime();
         }
 
-        public ref readonly MocConfig GetConfig()
+        public MocConfig GetConfig()
         {
-            return ref _config;
+            return _config;
         }
 
         public Tile[] GetTiles()
@@ -238,6 +252,7 @@ namespace MOC
         private JobHandle UpdateMvpMatrixAndSelectOccluders()
         {
             _vpMatrix = _camera.projectionMatrix * _camera.worldToCameraMatrix;
+            _terrainRayMarching?.UpdateVpMatrix(_vpMatrix);
 
             var updateMvpAndSelectOccludersJob = new UpdateMvpAndSelectOccludersJob
             {
@@ -255,6 +270,12 @@ namespace MOC
 
         private JobHandle RasterizeOccluders()
         {
+            JobHandle terrainRayMarchingJobHandle = default;
+            if (_terrainRayMarching != null)
+            {
+                terrainRayMarchingJobHandle = _terrainRayMarching.RayMarching();
+            }
+            
             var updateMatricesJob = new UpdateFillOffsetsJob
             {
                 MaxNumRasterizeTris = _config.MaxNumRasterizeTris,
@@ -329,7 +350,8 @@ namespace MOC
             // StatData.ClippedTriCount = clippingTriCount;
             
             // binRasterizerJob.Run(Constants.NumBins);
-            return binRasterizerJob.Schedule(_numBins, 1, prepareTriangleInfosJobHandle);
+            return binRasterizerJob.Schedule(_numBins, 1,
+                JobHandle.CombineDependencies(prepareTriangleInfosJobHandle, terrainRayMarchingJobHandle));
         }
 
         private JobHandle TestOccludees()

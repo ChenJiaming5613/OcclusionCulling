@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using System;
+using System.Diagnostics;
 using System.Linq;
 using MOC;
 using Unity.Collections;
@@ -9,6 +10,7 @@ public class CullingSystem : MonoBehaviour
 {
     public CullingSystemStatData StatData;
     [SerializeField] private MocConfigAsset configAsset;
+    [SerializeField] private Terrain terrain;
 
     private FrustumCulling _frustumCulling;
     private MaskedOcclusionCulling _maskedOcclusionCulling;
@@ -21,6 +23,9 @@ public class CullingSystem : MonoBehaviour
 
     private void Start()
     {
+        _occluderMeshRenderers ??= Array.Empty<MeshRenderer>();
+        _meshRenderers ??= Array.Empty<MeshRenderer>();
+        
         _camera = GetComponent<Camera>();
 
         var numObjects = _meshRenderers.Length;
@@ -33,11 +38,18 @@ public class CullingSystem : MonoBehaviour
 
         _frustumCulling = new FrustumCulling(_camera, _bounds, _cullingResults);
         _maskedOcclusionCulling = new MaskedOcclusionCulling(configAsset, _camera, _bounds, _occluderMeshRenderers, _cullingResults);
+        if (terrain != null) _maskedOcclusionCulling.SetTerrain(terrain);
 
         StatData.TotalObjectCount = numObjects;
         StatData.FrustumCullingCount = -1; // 标记是否开始统计
     }
 
+    [ContextMenu("Visualize Depth Texture")]
+    private void VisualizeDepthTexture()
+    {
+        _maskedOcclusionCulling.VisualizeDepthTexture();
+    }
+    
     private void OnDestroy()
     {
         _frustumCulling.Dispose();
@@ -54,13 +66,13 @@ public class CullingSystem : MonoBehaviour
         _frustumCulling.Cull();
         _stopwatch.Stop();
         StatData.CostTimeFrustumCulling = _stopwatch.ElapsedTicks * 1000f / Stopwatch.Frequency;
-        StatData.FrustumCullingCount = _cullingResults.Sum(it => it ? 1 : 0);
+        StatData.FrustumCullingCount = CalcCullingCount();
 
         _stopwatch.Restart();
         _maskedOcclusionCulling.Cull();
         _stopwatch.Stop();
         StatData.CostTimeMaskedOcclusionCulling = _stopwatch.ElapsedTicks * 1000f / Stopwatch.Frequency;
-        StatData.MaskedOcclusionCullingCount = _cullingResults.Sum(it => it ? 1 : 0) - StatData.FrustumCullingCount;
+        StatData.MaskedOcclusionCullingCount = CalcCullingCount() - StatData.FrustumCullingCount;
     }
 
     public void SetMeshRenderers(MeshRenderer[] occluderMeshRenderers, MeshRenderer[] occludeeMeshRenderers)
@@ -96,6 +108,16 @@ public class CullingSystem : MonoBehaviour
     public MaskedOcclusionCulling GetMaskedOcclusionCulling()
     {
         return _maskedOcclusionCulling;
+    }
+
+    private int CalcCullingCount()
+    {
+        var count = 0;
+        foreach (var cullingResult in _cullingResults)
+        {
+            if (cullingResult) count++;
+        }
+        return count;
     }
 }
 

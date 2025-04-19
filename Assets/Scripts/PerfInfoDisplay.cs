@@ -71,6 +71,7 @@ public class PerfInfoDisplay : MonoBehaviour
                $"\nOccludees: {_occludeesIndicator.GetStatusStr()}" +
                $"\nClear: {_clearIndicator.GetStatusStr()}" +
                $"\nMSOC Culled: {_msocCounter.GetStatusStr()}" +
+               $"\nRay Marching Step: {config.RayMarchingStep}" +
                // $"\nMSOC Total Tri: {_totalTriCounter.GetStatusStr()}" +
                // $"\nMSOC Clipped Tri: {_clippedTriCounter.GetStatusStr()}" +
                $"\nCount: {_count}";

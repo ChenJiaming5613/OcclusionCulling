@@ -3,7 +3,7 @@ using Unity.Collections;
 using Unity.Jobs;
 using Unity.Mathematics;
 
-namespace TerrainRayMarching
+namespace MOC.TerrainRayMarching
 {
     [BurstCompile]
     public struct RayMarchingJob : IJobParallelFor
@@ -12,27 +12,29 @@ namespace TerrainRayMarching
         public float3 BottomLeftCorner;
         public float3 RightStep;
         public float3 UpStep;
+        public float3 RayMarchingStep;
+        public float4x4 VpMatrix;
+
         public int2 DepthBufferSize;
         public int2 BinSize;
-        public int2 NumBinXY; // DepthBufferSize / BinSize
+        public int2 BinGridSize; // DepthBufferSize / BinSize
         public int HeightmapSize;
+        public int HolesMapSize;
         public float3 TerrainSize;
-        public float Near;
-        public float Far;
-        public float RayMarchingStep;
 
         [ReadOnly] public NativeArray<float> Heightmap;
+        [ReadOnly] public NativeArray<bool> HolesMap;
 
         [NativeDisableParallelForRestriction] [WriteOnly]
         public NativeArray<float> DepthBuffer;
         
         public void Execute(int binIdx)
         {
-            var binXY = new int2(binIdx % NumBinXY.x, binIdx / NumBinXY.x);
+            var binXY = new int2(binIdx % BinGridSize.x, binIdx / BinGridSize.x);
             var pixelStart = binXY * BinSize;
             var pixelEnd = new int2(
-                binXY.x == NumBinXY.x - 1 ? DepthBufferSize.x : (binXY.x + 1) * BinSize.x,
-                binXY.y == NumBinXY.y - 1 ? DepthBufferSize.y : (binXY.y + 1) * BinSize.y
+                binXY.x == BinGridSize.x - 1 ? DepthBufferSize.x : (binXY.x + 1) * BinSize.x,
+                binXY.y == BinGridSize.y - 1 ? DepthBufferSize.y : (binXY.y + 1) * BinSize.y
             );
             var pixelIdxRow = pixelStart.y * DepthBufferSize.x + pixelStart.x;
             var blank = false;
@@ -51,8 +53,6 @@ namespace TerrainRayMarching
                 var missAll = true;
                 for (var x = pixelStart.x; x < pixelEnd.x; x++)
                 {
-                    // var y = pixelIdx / DepthBufferSize.x;
-                    // var x = pixelIdx % DepthBufferSize.x;
                     if ((x + y) % 2 == 1)
                     {
                         pixelIdx++;
@@ -60,33 +60,58 @@ namespace TerrainRayMarching
                     }
                     var point = BottomLeftCorner + x * RightStep + y * UpStep;
                     var dir = math.normalize(point - CamPos);
-                    var depth = Near;
-                    while (IsAboveTerrain(point, ref depth))
+                    // var depth = Near;
+                    var step = RayMarchingStep.x;
+                    bool isOutside;
+                    var existHole = false;
+                    while (IsAboveTerrain(point, out isOutside, ref existHole))
                     {
                         // TODO: 提前退出：当point已经高于terrain最大高度并且是向上移动
-                        point += dir * RayMarchingStep;
-                        depth += RayMarchingStep;
+                        point += dir * step;
+                        if (step < RayMarchingStep.y) step += RayMarchingStep.z;
                     }
-                    var depth01 = (depth - Near) / (Far - Near);
-                    if (depth01 < 1.0f) missAll = false;
-                    DepthBuffer[pixelIdx++] = depth01;
+
+                    if (isOutside)
+                    {
+                        DepthBuffer[pixelIdx++] = 1.0f;
+                        if (existHole) missAll = false;
+                        continue;
+                    }
+
+                    var depth = CalcNdcDepth(point);
+                    if (depth < 1.0f) missAll = false;
+                    DepthBuffer[pixelIdx++] = depth;
                 }
                 if (missAll) blank = true;
                 pixelIdxRow += DepthBufferSize.x;
             }
         }
         
-        private bool IsAboveTerrain(in float3 point, ref float depth)
+        private bool IsAboveTerrain(in float3 point, out bool isOutside, ref bool existHole)
         {
             if (!(point.x >= 0f && point.x < TerrainSize.x && point.z >= 0f && point.z < TerrainSize.z))
             {
-                depth = Far;
+                isOutside = true;
                 return false;
             }
             var uv = point.xz / TerrainSize.xz;
             var coord = new int2(uv * HeightmapSize);
             var height = Heightmap[coord.y * HeightmapSize + coord.x];
-            return point.y > height;
+            isOutside = false;
+            var isAbove = point.y > height;
+            if (isAbove) return true;
+            var coordHole = new int2(uv * HolesMapSize);
+            var isHole = HolesMap[coordHole.y * HolesMapSize + coordHole.x];
+            if (!isHole) return false;
+            isOutside = true;
+            existHole = true;
+            return false;
+        }
+
+        private float CalcNdcDepth(in float3 point)
+        {
+            var clipSpacePoint = math.mul(VpMatrix, new float4(point, 1.0f));
+            return (clipSpacePoint.z / clipSpacePoint.w) * 0.5f + 0.5f;
         }
     }
 }

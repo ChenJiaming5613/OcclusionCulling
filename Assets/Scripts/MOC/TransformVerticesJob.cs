@@ -40,7 +40,14 @@ namespace MOC
                 var localSpaceVertex = new float4(LocalSpaceVertices[Indices[i] + vertexOffset], 1.0f);
                 var clipSpaceVertex = math.mul(mvpMatrix, localSpaceVertex);
                 var ndcSpaceVertex = clipSpaceVertex.xyz / clipSpaceVertex.w;
-                var screenSpaceVertex = ndcSpaceVertex * 0.5f + 0.5f;
+                var screenSpaceVertex = new float3(
+                    ndcSpaceVertex.xy * 0.5f + 0.5f,
+                    #if MOC_REVERSED_Z
+                    ndcSpaceVertex.z // TODO: z in [0, 1]
+                    #else
+                    ndcSpaceVertex.z * 0.5f + 0.5f
+                    #endif
+                );
                 screenSpaceVertex.x *= DepthBufferWidth;
                 screenSpaceVertex.y *= DepthBufferHeight;
                 ScreenSpaceVertices[fillOffset + i - indexStart] = screenSpaceVertex;

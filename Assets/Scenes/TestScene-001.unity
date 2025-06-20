@@ -84721,8 +84721,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1671922668}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.013601886, y: 0.66943413, z: -0.012701101, w: 0.7426383}
-  m_LocalPosition: {x: -221.3, y: 22.642109, z: 59.1}
+  m_LocalRotation: {x: -0.12624696, y: 0.6961392, z: -0.12945573, w: -0.6947612}
+  m_LocalPosition: {x: 450.65567, y: 217.6704, z: 2.5882328}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -84845,6 +84845,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   configAsset: {fileID: 11400000, guid: 5413c661c501c5b4da1d663601d4742f, type: 2}
+  terrain: {fileID: 0}
 --- !u!114 &1671922684
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -84888,13 +84889,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   depthBuffer: {fileID: 0}
-  z0Color: {r: 0, g: 0, b: 0, a: 1}
-  z1Color: {r: 1, g: 1, b: 1, a: 1}
   showBitmask: 1
   visTileBorder: 0
   savePng: 0
   reverse: 0
   remapMinMax: 0
+  depthScale: 1
   depthRange: {x: 0, y: 0}
 --- !u!1 &1673347064
 GameObject:

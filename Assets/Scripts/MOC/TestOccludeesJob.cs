@@ -20,7 +20,7 @@ namespace MOC
         // [NativeDisableParallelForRestriction] public NativeArray<Tile> Tiles;
         public NativeSlice<bool> CullingResults;
         
-        public void Execute(int objIdx) // TODO: 没有执行？！！
+        public void Execute(int objIdx)
         {
             if (CullingResults[objIdx]) return;
             if (objIdx < NumOccluders && OccluderFlags[objIdx]) return;
@@ -56,7 +56,11 @@ namespace MOC
                         // tile.z[i] = closestDepth;
                         // continue;
                         // if (closestDepth > tile.z0[i]) continue;
+                        #if MOC_REVERSED_Z
+                        if (closestDepth < tile.z[i] && tile.bitmask[i] == (bitmask[i] | tile.bitmask[i])) continue;
+                        #else
                         if (closestDepth > tile.z[i] && tile.bitmask[i] == (bitmask[i] | tile.bitmask[i])) continue;
+                        #endif
                         
                         isOccluded = false;
                         break;
@@ -89,16 +93,31 @@ namespace MOC
             var screenMin = new int2(int.MaxValue, int.MaxValue);
             var screenMax = new int2(int.MinValue, int.MinValue);
 
-            var screenSize = new int3(depthBufferSize, 1);
-            closestDepth = float.MaxValue;
+            var screenSize = new int2(depthBufferSize);
+            #if MOC_REVERSED_Z
+            closestDepth = 0f;
+            #else
+            closestDepth = 1f;
+            #endif
             for (var i = 0; i < 8; i++)
             {
                 var clipSpacePoint = math.mul(mvpMatrix, corners[i]);
-                var screenSpacePoint = (clipSpacePoint.xyz / clipSpacePoint.w * 0.5f + 0.5f) * screenSize;
+                var screenSpacePoint = new float3(
+                    (clipSpacePoint.xy / clipSpacePoint.w * 0.5f + 0.5f) * screenSize,
+                    #if MOC_REVERSED_Z
+                    clipSpacePoint.z / clipSpacePoint.w // TODO: z in [0, 1]
+                    #else
+                    clipSpacePoint.z / clipSpacePoint.w * 0.5f + 0.5f
+                    #endif
+                );
                 var screenXY = math.clamp(new int2(screenSpacePoint.xy), 0, screenSize.xy - 1);
                 screenMin = math.min(screenMin, screenXY);
                 screenMax = math.max(screenMax, screenXY);
+                #if MOC_REVERSED_Z
+                closestDepth = math.max(closestDepth, screenSpacePoint.z);
+                #else
                 closestDepth = math.min(closestDepth, screenSpacePoint.z);
+                #endif
             }
 
             rect = new int4(screenMin.x, screenMax.x, screenMin.y, screenMax.y);

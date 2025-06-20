@@ -1,19 +1,19 @@
 ﻿using System.IO;
 using MOC;
 using UnityEngine;
+using UnityEngine.Experimental.Rendering;
 
 [RequireComponent(typeof(CullingSystem))]
 public class DepthBufferVisualizer : MonoBehaviour
 {
     [SerializeField] private Texture2D depthBuffer;
-    [SerializeField] private Color z0Color = Color.black;
-    [SerializeField] private Color z1Color = Color.white;
     [SerializeField] private bool showBitmask;
     [SerializeField] private bool visTileBorder;
     [SerializeField] private bool savePng;
     [SerializeField] private bool reverse;
     [SerializeField] private bool remapMinMax;
-    [SerializeField]private Vector2 depthRange;
+    [SerializeField] private float depthScale = 1.0f;
+    [SerializeField] private Vector2 depthRange;
     private CullingSystem _cullingSystem;
     private MaskedOcclusionCulling _moc;
         
@@ -32,7 +32,7 @@ public class DepthBufferVisualizer : MonoBehaviour
         if (!depthBuffer || depthBuffer.width != config.DepthBufferWidth ||
             depthBuffer.height != config.DepthBufferHeight)
         {
-            depthBuffer = new Texture2D(config.DepthBufferWidth, config.DepthBufferHeight, TextureFormat.ARGB32, false)
+            depthBuffer = new Texture2D(config.DepthBufferWidth, config.DepthBufferHeight, GraphicsFormat.R32_SFloat, TextureCreationFlags.None)
             {
                 wrapMode = TextureWrapMode.Clamp,
                 filterMode = FilterMode.Point
@@ -63,7 +63,7 @@ public class DepthBufferVisualizer : MonoBehaviour
             for (var i = 0; i < 4; i++)
             {
                 if (Mathf.Approximately(tile.z[i], 1.0f)) continue;
-                minDepth = Mathf.Min(minDepth, tile.z[i]);
+                if (tile.z[i] > 0) minDepth = Mathf.Min(minDepth, tile.z[i]);
                 maxDepth = Mathf.Max(maxDepth, tile.z[i]);
             }
         }
@@ -96,7 +96,7 @@ public class DepthBufferVisualizer : MonoBehaviour
 
                 if (showBitmask)
                 {
-                    depthBuffer.SetPixel(pixelCol, pixelRow, bitValue == 1 ? z1Color : z0Color);
+                    depthBuffer.SetPixel(pixelCol, pixelRow, new Color(bitValue, 0, 0, 0));
                     continue;
                 }
 
@@ -105,11 +105,11 @@ public class DepthBufferVisualizer : MonoBehaviour
                     z = Mathf.Clamp(z, 0.0f, 1.0f);
                     if (reverse) z = 1.0f - z;
                     if (remapMinMax) z = (z - depthRange.x) / (depthRange.y - depthRange.x);
-                    depthBuffer.SetPixel(pixelCol, pixelRow, new Color(z, z, z, 1.0f));
+                    depthBuffer.SetPixel(pixelCol, pixelRow, new Color(z * depthScale, 0, 0, 0));
                 }
                 else
                 {
-                    depthBuffer.SetPixel(pixelCol, pixelRow, z0Color);
+                    depthBuffer.SetPixel(pixelCol, pixelRow, new Color(0, 0, 0, 0));
                 }
             }
         }

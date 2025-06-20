@@ -99,13 +99,21 @@ namespace MOC
             FlatInfo[triIdx] = flatInfo;
             
             ComputeDepthPlane(v0, v1, v2, out var zPixelDx, out var zPixelDy);
+            #if MOC_REVERSED_Z
+            var zTriMax = math.min(math.min(v0.z, v1.z), v2.z);
+            #else
             var zTriMax = math.max(math.max(v0.z, v1.z), v2.z);
+            #endif
             var zSubTileDx = zPixelDx * MocConfig.SubTileWidth;
             var zSubTileDy = zPixelDy * MocConfig.SubTileHeight;
             var zTileMinBase = v0.z
                   + zPixelDx * (tileMinX * MocConfig.TileWidth - v0.x)
                   + zPixelDy * (tileMinY * MocConfig.TileHeight - v0.y);
+            #if MOC_REVERSED_Z
+            var zSubTileMax = zTileMinBase + (zSubTileDx < 0 ? zSubTileDx : 0) + (zSubTileDy < 0 ? zSubTileDy : 0);
+            #else
             var zSubTileMax = zTileMinBase + (zSubTileDx > 0 ? zSubTileDx : 0) + (zSubTileDy > 0 ? zSubTileDy : 0);
+            #endif
             DepthParams[triIdx] = new float4(zSubTileDx, zSubTileDy, zTriMax, zSubTileMax);
         }
         

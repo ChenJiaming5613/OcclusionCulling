@@ -106,7 +106,11 @@ namespace MOC
 
                     RasterizeTile(
                         tileIdx, y, 
+                        #if MOC_REVERSED_Z
+                        math.max(z, zTriMax),
+                        #else
                         math.min(z, zTriMax),
+                        #endif
                         rightMask,
                         ix0, ix1, ix2,
                         flatInfo
@@ -180,14 +184,24 @@ namespace MOC
             var tile = Tiles[tileIdx];
             for (var i = 0; i < 4; i++)
             {
+                #if MOC_REVERSED_Z
+                if (tile.bitmask[i] == ~0u && zMax[i] <= tile.z[i]) continue;
+                if (bitmask[i] == ~0u && zMax[i] > tile.z[i])
+                #else
                 if (tile.bitmask[i] == ~0u && zMax[i] >= tile.z[i]) continue;
                 if (bitmask[i] == ~0u && zMax[i] < tile.z[i])
+                #endif
                 {
                     tile.z[i] = zMax[i];
                     tile.bitmask[i] = bitmask[i];
                     continue;
                 }
+                
+                #if MOC_REVERSED_Z
+                tile.z[i] = tile.bitmask[i] == 0u ? zMax[i] : math.min(tile.z[i], zMax[i]);
+                #else
                 tile.z[i] = tile.bitmask[i] == 0u ? zMax[i] : math.max(tile.z[i], zMax[i]);
+                #endif
                 tile.bitmask[i] |= bitmask[i];
             }
             Tiles[tileIdx] = tile;

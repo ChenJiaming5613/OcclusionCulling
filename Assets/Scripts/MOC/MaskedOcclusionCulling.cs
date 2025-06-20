@@ -241,9 +241,11 @@ namespace MOC
                 var defaultTile = new Tile
                 {
                     bitmask = uint4.zero,
-                    // z0 = 1.0f,
-                    // z1 = 0.0f
+                    #if MOC_REVERSED_Z
+                    z = 0.0f
+                    #else
                     z = 1.0f
+                    #endif
                 };
                 UnsafeUtility.MemCpyReplicate(_tiles.GetUnsafePtr(), &defaultTile, sizeof(Tile), _tiles.Length);
             }
@@ -251,7 +253,7 @@ namespace MOC
 
         private JobHandle UpdateMvpMatrixAndSelectOccluders()
         {
-            _vpMatrix = _camera.projectionMatrix * _camera.worldToCameraMatrix;
+            _vpMatrix = GetProjectionMatrix() * _camera.worldToCameraMatrix;
             _terrainRayMarching?.UpdateVpMatrix(_vpMatrix);
 
             var updateMvpAndSelectOccludersJob = new UpdateMvpAndSelectOccludersJob
@@ -369,6 +371,15 @@ namespace MOC
                 CullingResults = _cullingResults
             };
             return testOccludeesJob.Schedule(_numObjects, 64);
+        }
+
+        private Matrix4x4 GetProjectionMatrix()
+        {
+            #if MOC_REVERSED_Z
+            return GL.GetGPUProjectionMatrix(_camera.projectionMatrix, false);
+            #else
+            return _camera.projectionMatrix;
+            #endif
         }
 
         private float GetCostTime()

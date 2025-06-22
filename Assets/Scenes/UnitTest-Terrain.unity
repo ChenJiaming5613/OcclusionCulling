@@ -393,7 +393,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &339919869
 Transform:
   m_ObjectHideFlags: 0
@@ -411,7 +411,7 @@ Transform:
   - {fileID: 1249152614}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &758305574
+--- !u!1 &500417713
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -419,9 +419,9 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 758305577}
-  - component: {fileID: 758305576}
-  - component: {fileID: 758305575}
+  - component: {fileID: 500417716}
+  - component: {fileID: 500417715}
+  - component: {fileID: 500417714}
   m_Layer: 0
   m_Name: Terrain
   m_TagString: Untagged
@@ -429,13 +429,13 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 2147483647
   m_IsActive: 1
---- !u!154 &758305575
+--- !u!154 &500417714
 TerrainCollider:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 758305574}
+  m_GameObject: {fileID: 500417713}
   m_Material: {fileID: 0}
   m_IncludeLayers:
     serializedVersion: 2
@@ -447,18 +447,18 @@ TerrainCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 2
-  m_TerrainData: {fileID: 15600000, guid: ca9530458cfe940439b4885e005a09f1, type: 2}
+  m_TerrainData: {fileID: 15600000, guid: fb363cb8d435aae4bb4ee68514dac4fe, type: 2}
   m_EnableTreeColliders: 1
---- !u!218 &758305576
+--- !u!218 &500417715
 Terrain:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 758305574}
+  m_GameObject: {fileID: 500417713}
   m_Enabled: 1
   serializedVersion: 6
-  m_TerrainData: {fileID: 15600000, guid: ca9530458cfe940439b4885e005a09f1, type: 2}
+  m_TerrainData: {fileID: 15600000, guid: fb363cb8d435aae4bb4ee68514dac4fe, type: 2}
   m_TreeDistance: 5000
   m_TreeBillboardDistance: 50
   m_TreeCrossFadeLength: 5
@@ -489,13 +489,13 @@ Terrain:
   m_EnableHeightmapRayTracing: 1
   m_EnableTreesAndDetailsRayTracing: 0
   m_TreeMotionVectorModeOverride: 3
---- !u!4 &758305577
+--- !u!4 &500417716
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 758305574}
+  m_GameObject: {fileID: 500417713}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
@@ -520,6 +520,7 @@ GameObject:
   - component: {fileID: 983675960}
   - component: {fileID: 983675962}
   - component: {fileID: 983675963}
+  - component: {fileID: 983675964}
   m_Layer: 0
   m_Name: Main Camera
   m_TagString: MainCamera
@@ -594,8 +595,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 983675954}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.06485259, y: -0.123021945, z: 0.008057888, w: 0.9902499}
-  m_LocalPosition: {x: 255.7061, y: 79.93075, z: 206.1906}
+  m_LocalRotation: {x: -0.0015805757, y: -0.9948142, z: 0.014915369, w: -0.10059722}
+  m_LocalPosition: {x: 426.51608, y: 74.23268, z: 840.7455}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -675,7 +676,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   configAsset: {fileID: 11400000, guid: 5413c661c501c5b4da1d663601d4742f, type: 2}
-  terrain: {fileID: 758305576}
+  terrain: {fileID: 500417715}
 --- !u!114 &983675962
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -689,13 +690,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   depthBuffer: {fileID: 0}
-  z0Color: {r: 0, g: 0, b: 0, a: 1}
-  z1Color: {r: 1, g: 1, b: 1, a: 1}
   showBitmask: 0
   visTileBorder: 0
   savePng: 0
   reverse: 0
   remapMinMax: 0
+  depthScale: 1
   depthRange: {x: 0, y: 0}
 --- !u!114 &983675963
 MonoBehaviour:
@@ -710,6 +710,19 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   enableVisOccluders: 0
+--- !u!114 &983675964
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 983675954}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 92617414fb4a437f90cb2fb4853c5753, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  targetGameObject: {fileID: 339919867}
 --- !u!1 &1069590044
 GameObject:
   m_ObjectHideFlags: 0
@@ -991,8 +1004,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1258562016}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.34429944, y: 0.32449657, z: -0.12818101, w: -0.87162465}
-  m_LocalPosition: {x: 261.11, y: 80.89, z: 221.77}
+  m_LocalRotation: {x: 0.06328754, y: -0.9226239, z: 0.33910805, w: 0.17252745}
+  m_LocalPosition: {x: 512.1473, y: 107.9, z: 440.1792}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1097,8 +1110,8 @@ Transform:
   m_GameObject: {fileID: 1746435618}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 257.3, y: 78.7, z: 218}
-  m_LocalScale: {x: 6.4899993, y: 6.49, z: 6.49}
+  m_LocalPosition: {x: 435.7, y: 72.5, z: 826.5}
+  m_LocalScale: {x: 5, y: 5, z: 5}
   m_ConstrainProportionsScale: 1
   m_Children: []
   m_Father: {fileID: 1102756751}
@@ -1130,8 +1143,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1871739872}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.0011017587, y: -0.99769235, z: 0.016157731, w: 0.06593763}
-  m_LocalPosition: {x: 248.59546, y: 52.612206, z: 356.77908}
+  m_LocalRotation: {x: 0.11983242, y: -0.8760538, z: 0.3718767, w: 0.28262645}
+  m_LocalPosition: {x: 496.7989, y: 104.97821, z: 471.36407}
   m_LocalScale: {x: 15, y: 15, z: 15}
   m_ConstrainProportionsScale: 1
   m_Children: []
@@ -1214,7 +1227,7 @@ SceneRoots:
   m_Roots:
   - {fileID: 983675957}
   - {fileID: 1069590046}
-  - {fileID: 758305577}
   - {fileID: 339919869}
   - {fileID: 170934644}
   - {fileID: 241702843}
+  - {fileID: 500417716}

@@ -769,12 +769,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   depthBuffer: {fileID: 0}
-  z0Color: {r: 0, g: 0, b: 0, a: 1}
-  z1Color: {r: 1, g: 1, b: 1, a: 1}
   showBitmask: 0
+  visTileBorder: 0
   savePng: 0
   reverse: 0
   remapMinMax: 0
+  depthScale: 1
   depthRange: {x: 0, y: 0}
 --- !u!114 &961739758
 MonoBehaviour:
@@ -788,10 +788,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 857011452fb64619ba9fd49d3dd4f5c6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  costTimeFrustumCulling: 0
-  costTimeMaskedOcclusionCulling: 0
-  occludersMeshRenderers: []
-  occludeesMeshRenderers: []
+  configAsset: {fileID: 11400000, guid: 5413c661c501c5b4da1d663601d4742f, type: 2}
+  terrain: {fileID: 0}
 --- !u!1 &968202375
 GameObject:
   m_ObjectHideFlags: 0

@@ -111,7 +111,11 @@ namespace MOC.TerrainRayMarching
         private float CalcNdcDepth(in float3 point)
         {
             var clipSpacePoint = math.mul(VpMatrix, new float4(point, 1.0f));
+            #if MOC_REVERSED_Z
+            return clipSpacePoint.z / clipSpacePoint.w;
+            #else
             return (clipSpacePoint.z / clipSpacePoint.w) * 0.5f + 0.5f;
+            #endif
         }
     }
 }
